@@ -880,6 +880,72 @@ async function handleConfirmAddItem(interaction, cartId, itemId) {
     }
 }
 
+async function handleRegionSelection(interaction) {
+    try {
+        // Criar uma mensagem ephemeral com botões para seleção de região
+        const embed = new EmbedBuilder()
+            .setTitle('🌎 Selecione uma Região')
+            .setDescription('**Escolha a região para seu pedido:**\n\n' +
+                'A região selecionada determinará quais contas estarão disponíveis para você.')
+            .setColor('#5865f2')
+            .setTimestamp();
+
+        // Criar botões para cada região
+        const row = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`select_region_BR_${interaction.customId}`) // Passa o ID do botão original
+                    .setLabel('Brasil')
+                    .setEmoji('🇧🇷')
+                    .setStyle(ButtonStyle.Primary),
+                new ButtonBuilder()
+                    .setCustomId(`select_region_NA_${interaction.customId}`)
+                    .setLabel('América do Norte')
+                    .setEmoji('🇺🇸')
+                    .setStyle(ButtonStyle.Primary),
+                new ButtonBuilder()
+                    .setCustomId(`select_region_EUW_${interaction.customId}`)
+                    .setLabel('Europa Oeste')
+                    .setEmoji('🇪🇺')
+                    .setStyle(ButtonStyle.Primary)
+            );
+
+        // Adicionar uma segunda linha se tiver mais regiões
+        const row2 = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`select_region_EUNE_${interaction.customId}`)
+                    .setLabel('Europa Nórdica')
+                    .setEmoji('🇪🇺')
+                    .setStyle(ButtonStyle.Primary),
+                new ButtonBuilder()
+                    .setCustomId(`select_region_LAS_${interaction.customId}`)
+                    .setLabel('América Latina Sul')
+                    .setEmoji('🇦🇷')
+                    .setStyle(ButtonStyle.Primary),
+                new ButtonBuilder()
+                    .setCustomId(`select_region_LAN_${interaction.customId}`)
+                    .setLabel('América Latina Norte')
+                    .setEmoji('🇲🇽')
+                    .setStyle(ButtonStyle.Primary)
+            );
+
+        // Mostrar a mensagem ephemeral com botões de região
+        await interaction.reply({
+            embeds: [embed],
+            components: [row, row2],
+            ephemeral: true // Importante: só o usuário vê isso
+        });
+
+    } catch (error) {
+        console.error('Error handling region selection:', error);
+        await interaction.reply({
+            content: '❌ Erro ao mostrar seleção de região.',
+            ephemeral: true
+        });
+    }
+}
+
 async function handleCancelClose(interaction) {
     try {
         await interaction.deferUpdate();

@@ -2,10 +2,11 @@ const { ChannelType, PermissionsBitField, EmbedBuilder } = require('discord.js')
 const config = require('../config.json');
 
 class TicketService {
-    static async createTicket(guild, user) {
+    static async createTicket(guild, user, region = null) {
         try {
-            // Generate unique ticket name
-            const ticketName = `carrinho-${user.username}-${Date.now()}`;
+            // Generate unique ticket name (now including region if provided)
+            const regionPrefix = region ? `${region.toLowerCase()}-` : '';
+            const ticketName = `carrinho-${regionPrefix}${user.username.toLowerCase()}-${Date.now()}`;
 
             // Create the ticket channel
             const ticketChannel = await guild.channels.create({
@@ -56,8 +57,8 @@ class TicketService {
                 ]
             });
 
-            // Send welcome message
-            await this.sendWelcomeMessage(ticketChannel, user);
+            // Send welcome message (now with region if provided)
+            await this.sendWelcomeMessage(ticketChannel, user, region);
 
             return ticketChannel;
         } catch (error) {
@@ -66,23 +67,26 @@ class TicketService {
         }
     }
 
-    static async sendWelcomeMessage(channel, user) {
+    static async sendWelcomeMessage(channel, user, region = null) {
         try {
+            const regionText = region ? ` (Região: ${region})` : '';
+
             const embed = new EmbedBuilder()
-                .setTitle(`🎮 Bem-vindo ao seu carrinho, ${user.displayName}!`)
+                .setTitle(`🎮 Bem-vindo ao seu carrinho${regionText}, ${user.displayName}!`)
                 .setDescription(`Este é seu canal privado para compras. Aqui você pode:\n\n` +
-                              `• Adicionar skins ao carrinho\n` +
-                              `• Remover itens\n` +
-                              `• Finalizar sua compra\n` +
-                              `• Receber suporte\n\n` +
-                              `Use os botões abaixo para gerenciar seu carrinho.`)
+                    `• Adicionar skins ao carrinho\n` +
+                    `• Remover itens\n` +
+                    `• Finalizar sua compra\n` +
+                    `• Receber suporte\n\n` +
+                    `${region ? `🌎 **Região selecionada: ${region}**\n\n` : ''}` +
+                    `Use os botões abaixo para gerenciar seu carrinho.`)
                 .setColor('#5865f2')
                 .setThumbnail(user.displayAvatarURL())
                 .setTimestamp();
 
-            await channel.send({ 
+            await channel.send({
                 content: `${user}`,
-                embeds: [embed] 
+                embeds: [embed]
             });
         } catch (error) {
             console.error('Error sending welcome message:', error);
@@ -159,8 +163,8 @@ class TicketService {
             const completedEmbed = new EmbedBuilder()
                 .setTitle('✅ Pedido Concluído')
                 .setDescription('**Seu pedido foi processado com sucesso!**\n\n' +
-                              'Todas as skins foram enviadas para suas contas.\n' +
-                              'Obrigado por escolher nosso serviço!')
+                    'Todas as skins foram enviadas para suas contas.\n' +
+                    'Obrigado por escolher nosso serviço!')
                 .setColor('#57f287')
                 .setTimestamp();
 

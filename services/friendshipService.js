@@ -25,9 +25,9 @@ class FriendshipService {
             if (existingFriendship) {
                 return await interaction.editReply({
                     content: `❌ Você já é amigo desta conta.\n` +
-                            `**Conta:** ${account.nickname}\n` +
-                            `**Seu nick:** ${existingFriendship.lol_nickname}#${existingFriendship.lol_tag}\n` +
-                            `**Adicionado em:** ${new Date(existingFriendship.added_at).toLocaleDateString('pt-BR')}`
+                        `**Conta:** ${account.nickname}\n` +
+                        `**Seu nick:** ${existingFriendship.lol_nickname}#${existingFriendship.lol_tag}\n` +
+                        `**Adicionado em:** ${new Date(existingFriendship.added_at).toLocaleDateString('pt-BR')}`
                 });
             }
 
@@ -36,9 +36,9 @@ class FriendshipService {
             if (existingRequest) {
                 return await interaction.editReply({
                     content: `❌ Já existe um pedido de amizade pendente para esta conta.\n` +
-                            `**Conta:** ${account.nickname}\n` +
-                            `**Nick solicitado:** ${existingRequest.lol_nickname}#${existingRequest.lol_tag}\n` +
-                            `**Enviado em:** ${new Date(existingRequest.created_at).toLocaleDateString('pt-BR')}`
+                        `**Conta:** ${account.nickname}\n` +
+                        `**Nick solicitado:** ${existingRequest.lol_nickname}#${existingRequest.lol_tag}\n` +
+                        `**Enviado em:** ${new Date(existingRequest.created_at).toLocaleDateString('pt-BR')}`
                 });
             }
 
@@ -51,10 +51,10 @@ class FriendshipService {
             // Responder ao usuário
             await interaction.editReply({
                 content: '✅ **Pedido de amizade enviado!**\n\n' +
-                        `Sua solicitação para adicionar a conta **${account.nickname}** foi enviada para análise.\n` +
-                        `**Seu nick:** ${lolNickname}#${lolTag}\n\n` +
-                        '⏳ Você será notificado quando o pedido for processado.\n' +
-                        '📅 Após aprovação, aguarde 7 dias para poder enviar presentes.'
+                    `Sua solicitação para adicionar a conta **${account.nickname}** foi enviada para análise.\n` +
+                    `**Seu nick:** ${lolNickname}#${lolTag}\n\n` +
+                    '⏳ Você será notificado quando o pedido for processado.\n' +
+                    '📅 Após aprovação, aguarde 7 dias para poder enviar presentes.'
             });
 
             // Fechar canal temporário após 5 segundos
@@ -70,7 +70,7 @@ class FriendshipService {
 
         } catch (error) {
             console.error('Error requesting friendship:', error);
-            
+
             try {
                 if (interaction.deferred) {
                     await interaction.editReply({
@@ -119,7 +119,7 @@ class FriendshipService {
 
             // Criar amizade
             await Friendship.create(request.user_id, request.account_id, request.lol_nickname, request.lol_tag);
-            
+
             // Incrementar contador de amigos
             await Account.incrementFriendCount(request.account_id);
 
@@ -129,19 +129,19 @@ class FriendshipService {
             // Notificar usuário
             const user = await User.findById(request.user_id);
             const discordUser = await interaction.guild.members.fetch(user.discord_id);
-            
+
             try {
                 const approvalDate = new Date();
                 const eligibleDate = new Date(approvalDate.getTime() + (7 * 24 * 60 * 60 * 1000)); // 7 dias
 
                 await discordUser.send({
                     content: `✅ **Pedido de amizade aprovado!**\n\n` +
-                            `Sua solicitação para a conta **${account.nickname}** foi aprovada.\n` +
-                            `**Nick cadastrado:** ${request.lol_nickname}#${request.lol_tag}\n` +
-                            `**Aprovado em:** ${approvalDate.toLocaleDateString('pt-BR')}\n\n` +
-                            `📅 **Importante:** Você poderá enviar presentes após ${eligibleDate.toLocaleDateString('pt-BR')}\n` +
-                            `⏰ Tempo de espera: 7 dias (sistema de segurança)\n\n` +
-                            `🎁 Assim que completar 7 dias, você será notificado automaticamente!`
+                        `Sua solicitação para a conta **${account.nickname}** foi aprovada.\n` +
+                        `**Nick cadastrado:** ${request.lol_nickname}#${request.lol_tag}\n` +
+                        `**Aprovado em:** ${approvalDate.toLocaleDateString('pt-BR')}\n\n` +
+                        `📅 **Importante:** Você poderá enviar presentes após ${eligibleDate.toLocaleDateString('pt-BR')}\n` +
+                        `⏰ Tempo de espera: 7 dias (sistema de segurança)\n\n` +
+                        `🎁 Assim que completar 7 dias, você será notificado automaticamente!`
                 });
 
                 // ⭐ AGENDAR NOTIFICAÇÃO DE 7 DIAS
@@ -177,25 +177,25 @@ class FriendshipService {
     // ⭐ NOVA FUNÇÃO: Agendar notificação de 7 dias
     static scheduleFriendshipNotification(userId, accountNickname, lolNickname, lolTag, eligibleDate) {
         const timeUntilEligible = eligibleDate.getTime() - Date.now();
-        
+
         if (timeUntilEligible > 0) {
             setTimeout(async () => {
                 try {
                     const { Client } = require('discord.js');
                     const client = require('../bot.js').client; // Assumindo que o cliente está exportado
-                    
+
                     if (client && client.user) {
                         const user = await client.users.fetch(userId);
                         await user.send({
                             content: `🎁 **Parabéns! Você agora pode enviar presentes!**\n\n` +
-                                    `A conta **${accountNickname}** completou 7 dias de amizade com você.\n` +
-                                    `**Seu nick:** ${lolNickname}#${lolTag}\n` +
-                                    `**Data de elegibilidade:** ${new Date().toLocaleDateString('pt-BR')}\n\n` +
-                                    `✅ Agora você pode:\n` +
-                                    `• Fazer pedidos de skins\n` +
-                                    `• Receber presentes nesta conta\n` +
-                                    `• Usar todos os recursos do shop\n\n` +
-                                    `🛍️ **Aproveite suas compras!**`
+                                `A conta **${accountNickname}** completou 7 dias de amizade com você.\n` +
+                                `**Seu nick:** ${lolNickname}#${lolTag}\n` +
+                                `**Data de elegibilidade:** ${new Date().toLocaleDateString('pt-BR')}\n\n` +
+                                `✅ Agora você pode:\n` +
+                                `• Fazer pedidos de skins\n` +
+                                `• Receber presentes nesta conta\n` +
+                                `• Usar todos os recursos do shop\n\n` +
+                                `🛍️ **Aproveite suas compras!**`
                         });
                         console.log(`[INFO] 7-day notification sent to user ${userId} for account ${accountNickname}`);
                     }
@@ -203,7 +203,7 @@ class FriendshipService {
                     console.error(`[ERROR] Failed to send 7-day notification to ${userId}:`, error);
                 }
             }, timeUntilEligible);
-            
+
             console.log(`[INFO] Scheduled 7-day notification for user ${userId}, account ${accountNickname} at ${eligibleDate}`);
         }
     }
@@ -212,7 +212,7 @@ class FriendshipService {
     static async canSendGifts(userId, accountId) {
         try {
             const friendship = await Friendship.findByUserAndAccount(userId, accountId);
-            
+
             if (!friendship) {
                 return { canSend: false, reason: 'Você não é amigo desta conta.' };
             }
@@ -225,7 +225,7 @@ class FriendshipService {
             if (daysDiff < minDays) {
                 const remainingDays = minDays - daysDiff;
                 const eligibleDate = new Date(friendshipDate.getTime() + (minDays * 24 * 60 * 60 * 1000));
-                
+
                 return {
                     canSend: false,
                     reason: `Aguarde mais ${remainingDays} dia(s) para enviar presentes.\nVocê poderá enviar presentes em: ${eligibleDate.toLocaleDateString('pt-BR')}`,
@@ -250,7 +250,7 @@ class FriendshipService {
     static async sendFriendshipRequestNotification(guild, user, account, lolNickname, lolTag, requestId) {
         try {
             const notificationChannel = guild.channels.cache.get(config.approvalNeededChannelId);
-            
+
             if (!notificationChannel) {
                 console.error('Canal de notificações não encontrado');
                 return;
@@ -286,10 +286,12 @@ class FriendshipService {
                         .setStyle(ButtonStyle.Secondary)
                 );
 
-            await notificationChannel.send({
+            // Use ClientMessageManager for notifications
+            const ClientMessageManager = require('../services/clientMessageManager');
+            await ClientMessageManager.forceNewMessage(notificationChannel, {
                 embeds: [embed],
                 components: [row]
-            });
+            }, `friendship_request_${requestId}`);
 
         } catch (error) {
             console.error('Error sending friendship request notification:', error);
@@ -322,17 +324,17 @@ class FriendshipService {
             const user = await User.findById(request.user_id);
             const account = await Account.findById(request.account_id);
             const discordUser = await interaction.guild.members.fetch(user.discord_id);
-            
+
             try {
                 await discordUser.send({
                     content: `❌ **Pedido de amizade rejeitado**\n\n` +
-                            `Sua solicitação para a conta **${account.nickname}** foi rejeitada.\n` +
-                            `**Nick que foi enviado:** ${request.lol_nickname}#${request.lol_tag}\n\n` +
-                            `Você pode tentar novamente ou entrar em contato com a administração.\n\n` +
-                            `💡 **Dicas para aprovação:**\n` +
-                            `• Verifique se o nick está correto\n` +
-                            `• Use seu nick principal do LoL\n` +
-                            `• Aguarde um tempo antes de tentar novamente`
+                        `Sua solicitação para a conta **${account.nickname}** foi rejeitada.\n` +
+                        `**Nick que foi enviado:** ${request.lol_nickname}#${request.lol_tag}\n\n` +
+                        `Você pode tentar novamente ou entrar em contato com a administração.\n\n` +
+                        `💡 **Dicas para aprovação:**\n` +
+                        `• Verifique se o nick está correto\n` +
+                        `• Use seu nick principal do LoL\n` +
+                        `• Aguarde um tempo antes de tentar novamente`
                 });
             } catch (dmError) {
                 console.log('Não foi possível enviar DM para o usuário');
@@ -413,7 +415,7 @@ class FriendshipService {
         const now = new Date();
         const past = new Date(dateString);
         const diffInMinutes = Math.floor((now - past) / (1000 * 60));
-        
+
         if (diffInMinutes < 0) {
             return 'há poucos instantes';
         } else if (diffInMinutes < 60) {

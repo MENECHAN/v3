@@ -1,31 +1,29 @@
-// services/clientMessageManager.js - Gerenciador completo de mensagens do cliente
-
-const { EmbedBuilder, ActionRowBuilder } = require('discord.js');
+const { MessageManager, Channel, Message, EmbedBuilder } = require('discord.js');
 
 class ClientMessageManager {
     constructor() {
-        // Cache para rastrear a última mensagem do bot em cada canal
+        // Cache to track the last bot message in each channel
         this.lastBotMessages = new Map(); // channelId -> messageId
         this.messageTimestamps = new Map(); // messageId -> timestamp
         this.channelContexts = new Map(); // channelId -> context (cart, order, etc)
         
-        // Configurações
-        this.maxMessageAge = 60 * 60 * 1000; // 1 hora
-        this.cleanupInterval = 30 * 60 * 1000; // Limpar cache a cada 30 minutos
+        // Configuration
+        this.maxMessageAge = 60 * 60 * 1000; // 1 hour
+        this.cleanupInterval = 30 * 60 * 1000; // Clean cache every 30 minutes
         
-        // Iniciar limpeza automática
+        // Start automatic cleanup
         this.startPeriodicCleanup();
         
         console.log('[ClientMessageManager] Initialized');
     }
 
     /**
-     * Envia ou edita uma mensagem para o cliente
-     * Regra principal: Uma embed por canal que sempre é editada
-     * @param {TextChannel} channel - Canal onde enviar/editar
-     * @param {Object} messageData - Dados da mensagem (embeds, components, content)
-     * @param {string} context - Contexto da mensagem (opcional: cart, checkout, order)
-     * @param {boolean} forceNew - Forçar nova mensagem
+     * Sends or edits a message to the client
+     * Main rule: One embed per channel that is always edited
+     * @param {Channel} channel - Channel to send/edit
+     * @param {Object} messageData - Message data (embeds, components, content)
+     * @param {string} context - Message context (optional: cart, checkout, order)
+     * @param {boolean} forceNew - Force new message
      */
     async sendOrEditClientMessage(channel, messageData, context = null, forceNew = false) {
         try {
@@ -33,18 +31,18 @@ class ClientMessageManager {
             
             console.log(`[ClientMessageManager] Processing message for channel ${channelId}, context: ${context}, forceNew: ${forceNew}`);
             
-            // Se forceNew é true, criar nova mensagem
+            // If forceNew is true, create new message
             if (forceNew) {
                 return await this.createNewMessage(channel, messageData, context);
             }
 
-            // Tentar editar mensagem existente
+            // Try to edit existing message
             const editResult = await this.tryEditExistingMessage(channel, messageData, context);
             if (editResult) {
                 return editResult;
             }
 
-            // Se não conseguiu editar, criar nova
+            // If edit failed, create new
             return await this.createNewMessage(channel, messageData, context);
 
         } catch (error) {
@@ -54,7 +52,7 @@ class ClientMessageManager {
     }
 
     /**
-     * Tenta editar a mensagem existente do bot no canal
+     * Tries to edit the existing bot message in the channel
      */
     async tryEditExistingMessage(channel, messageData, context) {
         try {
@@ -66,7 +64,7 @@ class ClientMessageManager {
                 return null;
             }
 
-            // Tentar buscar a mensagem
+            // Try to fetch the message
             let lastMessage;
             try {
                 lastMessage = await channel.messages.fetch(lastMessageId);
@@ -76,18 +74,18 @@ class ClientMessageManager {
                 return null;
             }
 
-            // Verificar se a mensagem é válida para edição
+            // Check if message is valid for editing
             if (!this.isValidForEdit(lastMessage)) {
                 console.log(`[ClientMessageManager] Message ${lastMessageId} is not valid for editing`);
                 this.removeFromCache(channelId);
                 return null;
             }
 
-            // Editar a mensagem
+            // Edit the message
             await lastMessage.edit(messageData);
             this.updateTimestamp(lastMessageId);
             
-            // Atualizar contexto se fornecido
+            // Update context if provided
             if (context) {
                 this.channelContexts.set(channelId, context);
             }
@@ -102,19 +100,19 @@ class ClientMessageManager {
     }
 
     /**
-     * Cria uma nova mensagem no canal
+     * Creates a new message in the channel
      */
     async createNewMessage(channel, messageData, context) {
         try {
             const channelId = channel.id;
 
-            // Limpar mensagens antigas primeiro
+            // Clean up old messages first
             await this.cleanupOldMessages(channel);
 
-            // Enviar nova mensagem
+            // Send new message
             const newMessage = await channel.send(messageData);
             
-            // Atualizar cache
+            // Update cache
             this.lastBotMessages.set(channelId, newMessage.id);
             this.updateTimestamp(newMessage.id);
             
@@ -132,62 +130,20 @@ class ClientMessageManager {
     }
 
     /**
-     * Envia resposta ephemeral para interactions
-     * @param {Interaction} interaction - A interaction do Discord
-     * @param {Object} messageData - Dados da mensagem
-     */
-    async sendEphemeralResponse(interaction, messageData) {
-        try {
-            const ephemeralData = { ...messageData, ephemeral: true };
-
-            if (interaction.deferred) {
-                return await interaction.editReply(ephemeralData);
-            } else if (interaction.replied) {
-                return await interaction.followUp(ephemeralData);
-            } else {
-                return await interaction.reply(ephemeralData);
-            }
-        } catch (error) {
-            console.error('[ClientMessageManager] Error sending ephemeral response:', error);
-            
-            // Fallback: tentar followUp se reply falhou
-            try {
-                if (!interaction.replied && !interaction.deferred) {
-                    await interaction.deferReply({ ephemeral: true });
-                }
-                return await interaction.followUp({ ...messageData, ephemeral: true });
-            } catch (fallbackError) {
-                console.error('[ClientMessageManager] Fallback also failed:', fallbackError);
-                throw error;
-            }
-        }
-    }
-
-    /**
-     * Força uma nova mensagem (para casos especiais como checkout)
-     * @param {TextChannel} channel - Canal
-     * @param {Object} messageData - Dados da mensagem
-     * @param {string} context - Contexto
-     */
-    async forceNewMessage(channel, messageData, context = null) {
-        return await this.sendOrEditClientMessage(channel, messageData, context, true);
-    }
-
-    /**
-     * Verifica se uma mensagem é válida para edição
-     * @param {Message} message - A mensagem
+     * Checks if a message is valid for editing
+     * @param {Message} message - The message
      */
     isValidForEdit(message) {
         if (!message || message.author.id !== message.client.user.id) {
             return false;
         }
 
-        // Verificar se a mensagem tem embeds (só editamos messages com embeds)
+        // Check if message has embeds (we only edit messages with embeds)
         if (!message.embeds || message.embeds.length === 0) {
             return false;
         }
 
-        // Verificar se a mensagem é recente
+        // Check if message is recent
         const messageAge = Date.now() - message.createdTimestamp;
         if (messageAge > this.maxMessageAge) {
             return false;
@@ -197,16 +153,16 @@ class ClientMessageManager {
     }
 
     /**
-     * Atualiza timestamp de uma mensagem no cache
-     * @param {string} messageId - ID da mensagem
+     * Updates timestamp of a message in cache
+     * @param {string} messageId - Message ID
      */
     updateTimestamp(messageId) {
         this.messageTimestamps.set(messageId, Date.now());
     }
 
     /**
-     * Remove uma entrada do cache
-     * @param {string} channelId - ID do canal
+     * Removes an entry from cache
+     * @param {string} channelId - Channel ID
      */
     removeFromCache(channelId) {
         const messageId = this.lastBotMessages.get(channelId);
@@ -220,9 +176,9 @@ class ClientMessageManager {
     }
 
     /**
-     * Limpa mensagens antigas do cache e opcionalmente do canal
-     * @param {TextChannel} channel - Canal (opcional)
-     * @param {boolean} deleteFromChannel - Se deve deletar do canal também
+     * Cleans up old messages from cache and optionally from channel
+     * @param {Channel} channel - Channel (optional)
+     * @param {boolean} deleteFromChannel - Whether to delete from channel too
      */
     async cleanupOldMessages(channel = null, deleteFromChannel = true) {
         try {
@@ -234,12 +190,12 @@ class ClientMessageManager {
                 msg.embeds.length > 0
             );
 
-            // Se há mais de 1 mensagem do bot com embeds, deletar as antigas
+            // If there are more than 1 bot message with embeds, delete the old ones
             if (botMessages.size > 1) {
                 const sortedMessages = Array.from(botMessages.values())
                     .sort((a, b) => b.createdTimestamp - a.createdTimestamp);
 
-                // Manter apenas a mais recente, deletar as outras
+                // Keep only the most recent one, delete the others
                 for (let i = 1; i < sortedMessages.length; i++) {
                     try {
                         await sortedMessages[i].delete();
@@ -255,7 +211,7 @@ class ClientMessageManager {
     }
 
     /**
-     * Limpa cache antigo periodicamente
+     * Cleans up old cache periodically
      */
     cleanupCache() {
         const now = Date.now();
@@ -266,7 +222,7 @@ class ClientMessageManager {
                 this.messageTimestamps.delete(messageId);
                 cleanedCount++;
                 
-                // Remover da cache principal também
+                // Remove from main cache as well
                 for (const [channelId, cachedMessageId] of this.lastBotMessages.entries()) {
                     if (cachedMessageId === messageId) {
                         this.lastBotMessages.delete(channelId);
@@ -283,7 +239,7 @@ class ClientMessageManager {
     }
 
     /**
-     * Inicia limpeza periódica do cache
+     * Starts periodic cache cleanup
      */
     startPeriodicCleanup() {
         setInterval(() => {
@@ -294,25 +250,17 @@ class ClientMessageManager {
     }
 
     /**
-     * Obtém estatísticas do gerenciador
+     * Force a new message (for special cases like checkout)
+     * @param {Channel} channel - Channel
+     * @param {Object} messageData - Message data
+     * @param {string} context - Context
      */
-    getStats() {
-        return {
-            totalChannels: this.lastBotMessages.size,
-            totalMessages: this.messageTimestamps.size,
-            contexts: Array.from(this.channelContexts.values()).reduce((acc, context) => {
-                acc[context] = (acc[context] || 0) + 1;
-                return acc;
-            }, {}),
-            oldestMessage: this.messageTimestamps.size > 0 ? 
-                Math.min(...this.messageTimestamps.values()) : null,
-            newestMessage: this.messageTimestamps.size > 0 ? 
-                Math.max(...this.messageTimestamps.values()) : null
-        };
+    async forceNewMessage(channel, messageData, context = null) {
+        return await this.sendOrEditClientMessage(channel, messageData, context, true);
     }
 
     /**
-     * Método específico para carrinho - sempre edita
+     * Cart-specific method - always edits
      */
     async updateCartMessage(channel, cartEmbed, components, cartId) {
         return await this.sendOrEditClientMessage(channel, {
@@ -322,9 +270,9 @@ class ClientMessageManager {
     }
 
     /**
-     * Método específico para checkout - força nova mensagem
+     * Checkout-specific method - forces new message
      */
-    async sendCheckoutMessage(channel, checkoutEmbed, components, cartId) {
+    async updateCheckoutMessage(channel, checkoutEmbed, components, cartId) {
         return await this.forceNewMessage(channel, {
             embeds: [checkoutEmbed],
             components: components
@@ -332,7 +280,7 @@ class ClientMessageManager {
     }
 
     /**
-     * Método específico para categoria - edita ou nova
+     * Category-specific method - edits or new
      */
     async updateCategoryMessage(channel, categoryEmbed, components, cartId) {
         return await this.sendOrEditClientMessage(channel, {
@@ -342,7 +290,7 @@ class ClientMessageManager {
     }
 
     /**
-     * Método específico para itens - edita ou nova
+     * Items-specific method - edits or new
      */
     async updateItemsMessage(channel, itemsEmbed, components, cartId, category) {
         return await this.sendOrEditClientMessage(channel, {
@@ -352,7 +300,7 @@ class ClientMessageManager {
     }
 
     /**
-     * Método específico para preview de item - edita ou nova
+     * Item preview-specific method - edits or new
      */
     async updateItemPreviewMessage(channel, previewEmbed, components, cartId, itemId) {
         return await this.sendOrEditClientMessage(channel, {
@@ -362,7 +310,7 @@ class ClientMessageManager {
     }
 
     /**
-     * Método específico para pesquisa - edita ou nova
+     * Search-specific method - edits or new
      */
     async updateSearchMessage(channel, searchEmbed, components, cartId, searchQuery) {
         return await this.sendOrEditClientMessage(channel, {
@@ -372,7 +320,7 @@ class ClientMessageManager {
     }
 
     /**
-     * Método específico para confirmação de pedido - edita ou nova
+     * Order confirmation-specific method - edits or new
      */
     async updateOrderConfirmationMessage(channel, orderEmbed, components, orderId) {
         return await this.sendOrEditClientMessage(channel, {
@@ -380,80 +328,13 @@ class ClientMessageManager {
             components: components
         }, `order_${orderId}`);
     }
-
-    /**
-     * Método para enviar mensagem de erro como ephemeral
-     */
-    async sendErrorResponse(interaction, errorTitle, errorDescription) {
-        const errorEmbed = new EmbedBuilder()
-            .setTitle(`❌ ${errorTitle}`)
-            .setDescription(errorDescription)
-            .setColor('#ed4245')
-            .setTimestamp();
-
-        return await this.sendEphemeralResponse(interaction, {
-            embeds: [errorEmbed]
-        });
-    }
-
-    /**
-     * Método para enviar mensagem de sucesso como ephemeral
-     */
-    async sendSuccessResponse(interaction, successTitle, successDescription) {
-        const successEmbed = new EmbedBuilder()
-            .setTitle(`✅ ${successTitle}`)
-            .setDescription(successDescription)
-            .setColor('#57f287')
-            .setTimestamp();
-
-        return await this.sendEphemeralResponse(interaction, {
-            embeds: [successEmbed]
-        });
-    }
-
-    /**
-     * Método para enviar mensagem de aviso como ephemeral
-     */
-    async sendWarningResponse(interaction, warningTitle, warningDescription) {
-        const warningEmbed = new EmbedBuilder()
-            .setTitle(`⚠️ ${warningTitle}`)
-            .setDescription(warningDescription)
-            .setColor('#faa61a')
-            .setTimestamp();
-
-        return await this.sendEphemeralResponse(interaction, {
-            embeds: [warningEmbed]
-        });
-    }
-
-    /**
-     * Método para debug - mostra informações do cache
-     */
-    debug() {
-        console.log('[ClientMessageManager] Debug Info:');
-        console.log('Channels tracked:', this.lastBotMessages.size);
-        console.log('Messages tracked:', this.messageTimestamps.size);
-        console.log('Contexts:', Object.entries(this.getStats().contexts));
-        
-        // Mostrar alguns exemplos
-        let count = 0;
-        for (const [channelId, messageId] of this.lastBotMessages.entries()) {
-            if (count < 5) {
-                const context = this.channelContexts.get(channelId);
-                const timestamp = this.messageTimestamps.get(messageId);
-                const age = timestamp ? Math.floor((Date.now() - timestamp) / 1000) : 'unknown';
-                console.log(`  Channel ${channelId}: Message ${messageId}, Context: ${context}, Age: ${age}s`);
-                count++;
-            }
-        }
-    }
 }
 
-// Criar instância singleton
+// Create singleton instance
 const clientMessageManager = new ClientMessageManager();
 
-// Export do singleton
+// Export singleton
 module.exports = clientMessageManager;
 
-// Export da classe também (para testes)
+// Also export class (for testing)
 module.exports.ClientMessageManager = ClientMessageManager;

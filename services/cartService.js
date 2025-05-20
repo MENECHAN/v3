@@ -363,21 +363,9 @@ class CartService {
             // Update cart totals in database
             await Cart.updateTotals(cart.id, totalRP, totalPrice);
 
-            // Send or edit message
-            const messageData = {
-                embeds: [embed],
-                components: components
-            };
-
-            // Try to get the last message in channel
-            const messages = await channel.messages.fetch({ limit: 1 });
-            const lastMessage = messages.first();
-
-            if (lastMessage && lastMessage.author.id === channel.client.user.id) {
-                await lastMessage.edit(messageData);
-            } else {
-                await channel.send(messageData);
-            }
+            // Use ClientMessageManager to send/edit the message
+            const ClientMessageManager = require('../services/clientMessageManager');
+            await ClientMessageManager.updateCartMessage(channel, embed, components, cart.id);
 
         } catch (error) {
             console.error('Error sending cart embed:', error);
@@ -399,7 +387,7 @@ class CartService {
                 console.log(`[DEBUG] Catalog loaded with ${catalog.length} items`);
             } else {
                 console.log(`[DEBUG] Catalog file not found at ./catalog.json`);
-                // Se não houver catálogo, criar categorias padrão
+                // If no catalog, create default categories
                 const defaultCategories = {
                     'CHAMPION_SKIN': 0,
                     'CHAMPION': 0,
@@ -416,15 +404,15 @@ class CartService {
             catalog.forEach(item => {
                 let category;
 
-                // Se é chroma (RECOLOR), trate como categoria separada
+                // If it's a chroma (RECOLOR), treat as separate category
                 if (item.subInventoryType === 'RECOLOR') {
                     category = 'CHROMA';
                 }
-                // Se é bundle de chroma, trate como categoria separada
+                // If it's a chroma bundle, treat as separate category
                 else if (item.subInventoryType === 'CHROMA_BUNDLE') {
                     category = 'CHROMA_BUNDLE';
                 }
-                // Senão, use o inventoryType normal
+                // Otherwise, use the normal inventoryType
                 else {
                     category = item.inventoryType || 'OTHER';
                 }
@@ -434,7 +422,7 @@ class CartService {
 
             console.log(`[DEBUG] Category stats:`, categoryStats);
 
-            // Adicione este filtro para mostrar apenas categorias desejadas:
+            // Add this filter to show only desired categories:
             const allowedCategories = [
                 'CHAMPION_SKIN',
                 'CHAMPION',
@@ -450,7 +438,7 @@ class CartService {
                 'CHROMA_BUNDLE'
             ];
 
-            // Filtra apenas as categorias permitidas
+            // Filter for allowed categories only
             const filteredCategoryStats = {};
             Object.entries(categoryStats).forEach(([category, count]) => {
                 if (allowedCategories.includes(category)) {
@@ -460,7 +448,7 @@ class CartService {
 
             console.log(`[DEBUG] Filtered category stats:`, filteredCategoryStats);
 
-            // Se não houver categorias, criar pelo menos uma padrão
+            // If no categories, create at least one default
             if (Object.keys(filteredCategoryStats).length === 0) {
                 filteredCategoryStats['CHAMPION_SKIN'] = 0;
                 console.log(`[DEBUG] No categories found, using default CHAMPION_SKIN`);
@@ -503,7 +491,7 @@ class CartService {
             console.log(`[DEBUG] Select options created:`, selectOptions);
 
             if (selectOptions.length === 0) {
-                // Se não há opções, mostrar mensagem de erro
+                // If no options, show error message
                 const errorEmbed = new EmbedBuilder()
                     .setTitle('❌ Nenhuma Categoria Disponível')
                     .setDescription('No momento não há itens disponíveis no catálogo.')
@@ -519,10 +507,11 @@ class CartService {
                     );
 
                 console.log(`[DEBUG] Sending error embed - no categories`);
-                await channel.send({
-                    embeds: [errorEmbed],
-                    components: [backRow]
-                });
+
+                // Use ClientMessageManager instead of direct channel.send
+                const ClientMessageManager = require('../services/clientMessageManager');
+                await ClientMessageManager.updateCategoryMessage(channel, errorEmbed, [backRow], cartId);
+
                 return;
             }
 
@@ -544,10 +533,9 @@ class CartService {
 
             console.log(`[DEBUG] About to send category select message`);
 
-            await channel.send({
-                embeds: [embed],
-                components: [row1, row2]
-            });
+            // Use ClientMessageManager instead of direct channel.send
+            const ClientMessageManager = require('../services/clientMessageManager');
+            await ClientMessageManager.updateCategoryMessage(channel, embed, [row1, row2], cartId);
 
             console.log(`[DEBUG] Category select message sent successfully`);
 
@@ -555,7 +543,7 @@ class CartService {
             console.error('[ERROR] Error sending category select embed:', error);
             console.error('[ERROR] Stack trace:', error.stack);
 
-            // Tentar enviar mensagem de erro
+            // Try to send error message
             try {
                 const errorEmbed = new EmbedBuilder()
                     .setTitle('❌ Erro ao Carregar Categorias')
@@ -571,10 +559,12 @@ class CartService {
                             .setStyle(ButtonStyle.Secondary)
                     );
 
-                await channel.send({
+                const ClientMessageManager = require('../services/clientMessageManager');
+                await ClientMessageManager.forceNewMessage(channel, {
                     embeds: [errorEmbed],
                     components: [backRow]
-                });
+                }, `error_${cartId}`);
+
             } catch (sendError) {
                 console.error('[ERROR] Could not send error message:', sendError);
             }
@@ -612,7 +602,7 @@ class CartService {
                         item.subInventoryType !== 'CHROMA_BUNDLE';
                 }
 
-                // ⭐ NOVO FILTRO: Remover itens com preço 0 ou undefined
+                // Remove items with price 0 or undefined
                 const hasValidPrice = item.price && item.price > 0;
 
                 return matchesCategory && hasValidPrice;
@@ -650,10 +640,9 @@ class CartService {
                             .setStyle(ButtonStyle.Secondary)
                     );
 
-                await channel.send({
-                    embeds: [embed],
-                    components: [row]
-                });
+                // Use ClientMessageManager
+                const ClientMessageManager = require('../services/clientMessageManager');
+                await ClientMessageManager.updateItemsMessage(channel, embed, [row], cartId, category);
                 return;
             }
 
@@ -759,23 +748,9 @@ class CartService {
 
             console.log(`[DEBUG] Created ${components.length} component rows`);
 
-            // Send or edit message
-            const messages = await channel.messages.fetch({ limit: 1 });
-            const lastMessage = messages.first();
-
-            if (lastMessage && lastMessage.author.id === channel.client.user.id && lastMessage.embeds.length > 0) {
-                console.log(`[DEBUG] Editing existing message`);
-                await lastMessage.edit({
-                    embeds: [embed],
-                    components: components
-                });
-            } else {
-                console.log(`[DEBUG] Sending new message`);
-                await channel.send({
-                    embeds: [embed],
-                    components: components
-                });
-            }
+            // Use ClientMessageManager
+            const ClientMessageManager = require('../services/clientMessageManager');
+            await ClientMessageManager.updateItemsMessage(channel, embed, components, cartId, category);
 
             console.log(`[DEBUG] sendItemsEmbed completed successfully`);
 
@@ -798,10 +773,13 @@ class CartService {
                             .setStyle(ButtonStyle.Secondary)
                     );
 
-                await channel.send({
+                // Force new message in case of error
+                const ClientMessageManager = require('../services/clientMessageManager');
+                await ClientMessageManager.forceNewMessage(channel, {
                     embeds: [errorEmbed],
                     components: [backButton]
-                });
+                }, `error_${cartId}`);
+
             } catch (sendError) {
                 console.error('[ERROR] Could not send error message:', sendError);
             }
@@ -830,10 +808,13 @@ class CartService {
                     .setDescription('O item selecionado não foi encontrado no catálogo.')
                     .setColor('#ed4245');
 
-                return await channel.send({ embeds: [embed] });
+                // Use ClientMessageManager
+                const ClientMessageManager = require('../services/clientMessageManager');
+                await ClientMessageManager.updateItemPreviewMessage(channel, embed, [], cartId, itemId);
+                return;
             }
 
-            // Determinar categoria
+            // Determine category
             let category = item.inventoryType || 'OTHER';
             if (item.subInventoryType === 'RECOLOR') {
                 category = 'CHROMA';
@@ -888,13 +869,236 @@ class CartService {
                         .setStyle(ButtonStyle.Secondary)
                 );
 
-            await channel.send({
-                embeds: [embed],
-                components: [row]
-            });
+            // Use ClientMessageManager
+            const ClientMessageManager = require('../services/clientMessageManager');
+            await ClientMessageManager.updateItemPreviewMessage(channel, embed, [row], cartId, itemId);
 
         } catch (error) {
             console.error('[ERROR] Error sending item preview embed:', error);
+            throw error;
+        }
+    }
+
+    // Update handleSearchInCategory to use ClientMessageManager
+    static async handleSearchInCategory(channel, cartId, category, searchQuery, page = 1) {
+        try {
+            console.log(`[DEBUG] handleSearchInCategory - category: ${category}, searchQuery: "${searchQuery}", page: ${page}`);
+
+            // Load catalog
+            let catalog = [];
+
+            if (fs.existsSync('./catalog.json')) {
+                catalog = JSON.parse(fs.readFileSync('./catalog.json', 'utf8'));
+                console.log(`[DEBUG] Catalog loaded with ${catalog.length} items`);
+            } else {
+                console.log(`[DEBUG] Catalog file not found`);
+                return;
+            }
+
+            const query = searchQuery.toLowerCase();
+
+            // Filter items by category, search query, and valid price
+            const allItems = catalog.filter(item => {
+                let matchesCategory = false;
+
+                if (category === 'CHROMA') {
+                    matchesCategory = item.subInventoryType === 'RECOLOR';
+                } else if (category === 'CHROMA_BUNDLE') {
+                    matchesCategory = item.subInventoryType === 'CHROMA_BUNDLE';
+                } else if (category === 'CHAMPION_SKIN') {
+                    matchesCategory = item.inventoryType === 'CHAMPION_SKIN' &&
+                        item.subInventoryType !== 'RECOLOR' &&
+                        item.subInventoryType !== 'CHROMA_BUNDLE';
+                } else {
+                    matchesCategory = item.inventoryType === category;
+                }
+
+                const matchesSearch = item.name.toLowerCase().includes(query) ||
+                    (item.champion && item.champion.toLowerCase().includes(query)) ||
+                    (item.tags && item.tags.some(tag => tag.toLowerCase().includes(query)));
+
+                // Include only items with valid price
+                const hasValidPrice = item.price && item.price > 0;
+
+                return matchesCategory && matchesSearch && hasValidPrice;
+            });
+
+            console.log(`[DEBUG] Found ${allItems.length} items after filtering category, search, and price`);
+
+            // Remove duplicates based on name
+            const uniqueItems = [];
+            const seenNames = new Set();
+
+            allItems.forEach(item => {
+                if (!seenNames.has(item.name)) {
+                    seenNames.add(item.name);
+                    uniqueItems.push(item);
+                }
+            });
+
+            console.log(`[DEBUG] Found ${uniqueItems.length} unique items after removing duplicates`);
+
+            if (uniqueItems.length === 0) {
+                const embed = new EmbedBuilder()
+                    .setTitle('🔍 Nenhum Resultado na Categoria')
+                    .setDescription(`Nenhum item encontrado para: **${searchQuery}** na categoria **${this.getCategoryName(category)}**\n\n` +
+                        'Tente:\n' +
+                        '• Termos mais simples\n' +
+                        '• Nome do campeão\n' +
+                        '• Nome da skin\n\n' +
+                        '💡 *Apenas itens com preço válido são exibidos*')
+                    .setColor('#ed4245')
+                    .setTimestamp();
+
+                const row = new ActionRowBuilder()
+                    .addComponents(
+                        new ButtonBuilder()
+                            .setCustomId(`add_item_${cartId}`)
+                            .setLabel('◀️ Voltar às Categorias')
+                            .setStyle(ButtonStyle.Secondary)
+                    );
+
+                // Use ClientMessageManager
+                const ClientMessageManager = require('../services/clientMessageManager');
+                await ClientMessageManager.updateSearchMessage(channel, embed, [row], cartId, searchQuery);
+                return;
+            }
+
+            // Pagination logic
+            const needsPagination = uniqueItems.length > 10;
+            const itemsPerPage = 10;
+            const totalPages = needsPagination ? Math.ceil(uniqueItems.length / itemsPerPage) : 1;
+            const startIndex = needsPagination ? (page - 1) * itemsPerPage : 0;
+            const endIndex = needsPagination ? startIndex + itemsPerPage : uniqueItems.length;
+            const currentPageItems = uniqueItems.slice(startIndex, endIndex);
+
+            console.log(`[DEBUG] Pagination: showing ${currentPageItems.length} items on page ${page}/${totalPages}`);
+
+            // Show items from current page in the description
+            let itemsList = '';
+            currentPageItems.forEach((item, index) => {
+                const globalIndex = startIndex + index + 1;
+                itemsList += `**${globalIndex}.** ${item.name}\n`;
+                itemsList += `💰 ${item.price.toLocaleString()} RP - ${(item.price * 0.01).toFixed(2)}€\n\n`;
+            });
+
+            if (needsPagination && page < totalPages) {
+                const remainingItems = uniqueItems.length - endIndex;
+                itemsList += `... e mais ${remainingItems} itens\n\n`;
+                itemsList += `💡 *Use os botões de navegação para ver mais*`;
+            }
+
+            // Create embed
+            const embed = new EmbedBuilder()
+                .setTitle('🔍 Resultados da Pesquisa na Categoria')
+                .setColor('#5865f2')
+                .setTimestamp();
+
+            if (needsPagination) {
+                embed.setDescription(`**${uniqueItems.length} itens encontrados para:** ${searchQuery}\n` +
+                    `**Categoria:** ${this.getCategoryName(category)}\n` +
+                    `**Página:** ${page}/${totalPages}\n\n` +
+                    (itemsList || 'Nenhum item encontrado'));
+            } else {
+                embed.setDescription(`**${uniqueItems.length} itens encontrados para:** ${searchQuery}\n` +
+                    `**Categoria:** ${this.getCategoryName(category)}\n\n` +
+                    (itemsList || 'Nenhum item encontrado'));
+            }
+
+            const components = [];
+
+            // Create item select menu for current page items (limit to 25 items by Discord)
+            if (currentPageItems.length > 0) {
+                const selectOptions = currentPageItems.slice(0, 25).map(item => ({
+                    label: item.name.length > 100 ? item.name.substring(0, 97) + '...' : item.name,
+                    description: `${item.champion ? `${item.champion} - ` : ''}${item.price.toLocaleString()} RP (${(item.price * 0.01).toFixed(2)}€)`,
+                    value: item.id.toString()
+                }));
+
+                const selectMenu = new StringSelectMenuBuilder()
+                    .setCustomId(`search_result_select_${cartId}`)
+                    .setPlaceholder('Selecione uma skin...')
+                    .addOptions(selectOptions);
+
+                components.push(new ActionRowBuilder().addComponents(selectMenu));
+            }
+
+            // Navigation buttons with pagination
+            const navButtons = [];
+
+            if (needsPagination && totalPages > 1) {
+                if (page > 1) {
+                    navButtons.push(
+                        new ButtonBuilder()
+                            .setCustomId(`search_result_page_${cartId}_${category}_${page - 1}_${encodeURIComponent(searchQuery)}`)
+                            .setLabel('◀️ Anterior')
+                            .setStyle(ButtonStyle.Secondary)
+                    );
+                }
+
+                if (page < totalPages) {
+                    navButtons.push(
+                        new ButtonBuilder()
+                            .setCustomId(`search_result_page_${cartId}_${category}_${page + 1}_${encodeURIComponent(searchQuery)}`)
+                            .setLabel('Próxima ▶️')
+                            .setStyle(ButtonStyle.Secondary)
+                    );
+                }
+            }
+
+            // Always present buttons
+            navButtons.push(
+                new ButtonBuilder()
+                    .setCustomId(`search_category_${cartId}_${category}`)
+                    .setLabel('🔍 Nova Pesquisa')
+                    .setStyle(ButtonStyle.Primary)
+            );
+
+            navButtons.push(
+                new ButtonBuilder()
+                    .setCustomId(`add_item_${cartId}`)
+                    .setLabel('🏷️ Voltar às Categorias')
+                    .setStyle(ButtonStyle.Secondary)
+            );
+
+            components.push(new ActionRowBuilder().addComponents(navButtons));
+
+            // Use ClientMessageManager
+            const ClientMessageManager = require('../services/clientMessageManager');
+            await ClientMessageManager.updateSearchMessage(channel, embed, components, cartId, searchQuery);
+
+            console.log(`[DEBUG] handleSearchInCategory completed successfully`);
+
+        } catch (error) {
+            console.error('[ERROR] Error handling search in category:', error);
+            console.error('[ERROR] Stack trace:', error.stack);
+
+            try {
+                const errorEmbed = new EmbedBuilder()
+                    .setTitle('❌ Erro na Pesquisa')
+                    .setDescription('Ocorreu um erro durante a pesquisa. Tente novamente.')
+                    .setColor('#ed4245')
+                    .setTimestamp();
+
+                const backButton = new ActionRowBuilder()
+                    .addComponents(
+                        new ButtonBuilder()
+                            .setCustomId(`add_item_${cartId}`)
+                            .setLabel('◀️ Voltar às Categorias')
+                            .setStyle(ButtonStyle.Secondary)
+                    );
+
+                // Force new message for errors
+                const ClientMessageManager = require('../services/clientMessageManager');
+                await ClientMessageManager.forceNewMessage(channel, {
+                    embeds: [errorEmbed],
+                    components: [backButton]
+                }, `error_${cartId}`);
+
+            } catch (sendError) {
+                console.error('[ERROR] Could not send error message:', sendError);
+            }
+
             throw error;
         }
     }
@@ -1236,10 +1440,12 @@ class CartService {
                         .setStyle(ButtonStyle.Secondary)
                 );
 
-            await channel.send({
+            // Use ClientMessageManager for confirmation messages
+            const ClientMessageManager = require('../services/clientMessageManager');
+            await ClientMessageManager.forceNewMessage(channel, {
                 embeds: [embed],
                 components: [row]
-            });
+            }, `close_confirm_${cartId}`);
 
         } catch (error) {
             console.error('Error sending close cart confirmation:', error);

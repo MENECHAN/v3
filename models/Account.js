@@ -32,8 +32,12 @@ class Account {
         }
     }
 
-    static async findAvailable() {
+    static async findAvailable(region = null) {
         try {
+            if (region) {
+                return await this.findAvailableByRegion(region);
+            }
+
             const query = 'SELECT * FROM accounts WHERE friends_count < max_friends ORDER BY friends_count ASC';
             return await db.all(query);
         } catch (error) {
@@ -42,13 +46,13 @@ class Account {
         }
     }
 
-    static async create(nickname, rpAmount, friendsCount = 0, maxFriends = 250) {
+    static async create(nickname, rpAmount, friendsCount = 0, maxFriends = 250, region = 'BR') {
         try {
             const query = `
-                INSERT INTO accounts (nickname, rp_amount, friends_count, max_friends) 
-                VALUES (?, ?, ?, ?)
-            `;
-            const result = await db.run(query, [nickname, rpAmount, friendsCount, maxFriends]);
+            INSERT INTO accounts (nickname, rp_amount, friends_count, max_friends, region) 
+            VALUES (?, ?, ?, ?, ?)
+        `;
+            const result = await db.run(query, [nickname, rpAmount, friendsCount, maxFriends, region]);
             return result.lastID;
         } catch (error) {
             console.error('Error creating account:', error);
@@ -58,7 +62,7 @@ class Account {
 
     static async update(id, updates) {
         try {
-            const allowedFields = ['nickname', 'rp_amount', 'friends_count', 'max_friends'];
+            const allowedFields = ['nickname', 'rp_amount', 'friends_count', 'max_friends', 'region'];
             const fields = Object.keys(updates).filter(key => allowedFields.includes(key));
 
             if (fields.length === 0) {
@@ -75,6 +79,26 @@ class Account {
             return result.changes > 0;
         } catch (error) {
             console.error('Error updating account:', error);
+            throw error;
+        }
+    }
+
+    static async findByRegion(region) {
+        try {
+            const query = 'SELECT * FROM accounts WHERE region = ? ORDER BY friends_count ASC';
+            return await db.all(query, [region]);
+        } catch (error) {
+            console.error('Error finding accounts by region:', error);
+            throw error;
+        }
+    }
+
+    static async findAvailableByRegion(region) {
+        try {
+            const query = 'SELECT * FROM accounts WHERE region = ? AND friends_count < max_friends ORDER BY friends_count ASC';
+            return await db.all(query, [region]);
+        } catch (error) {
+            console.error('Error finding available accounts by region:', error);
             throw error;
         }
     }

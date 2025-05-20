@@ -14,36 +14,36 @@ class Cart {
         }
     }
 
-static async findActiveByUserId(userId) {
-    try {
-        console.log(`[DEBUG Cart.findActiveByUserId] Searching for user: ${userId}`);
+    static async findActiveByUserId(userId) {
+        try {
+            console.log(`[DEBUG Cart.findActiveByUserId] Searching for user: ${userId}`);
 
-        // ⭐ CORREÇÃO: Buscar primeiro diretamente por Discord ID como string
-        let query = 'SELECT * FROM carts WHERE user_id = ? AND status = ? ORDER BY created_at DESC LIMIT 1';
-        let cart = await db.get(query, [userId.toString(), 'active']);
+            // ⭐ CORREÇÃO: Buscar primeiro diretamente por Discord ID como string
+            let query = 'SELECT * FROM carts WHERE user_id = ? AND status = ? ORDER BY created_at DESC LIMIT 1';
+            let cart = await db.get(query, [userId.toString(), 'active']);
 
-        if (cart) {
-            console.log(`[DEBUG Cart.findActiveByUserId] Found active cart directly: ${cart.id}`);
-            return cart;
-        }
+            if (cart) {
+                console.log(`[DEBUG Cart.findActiveByUserId] Found active cart directly: ${cart.id}`);
+                return cart;
+            }
 
-        // ⭐ CORREÇÃO: Buscar através da tabela users se não encontrou diretamente
-        query = `
+            // ⭐ CORREÇÃO: Buscar através da tabela users se não encontrou diretamente
+            query = `
             SELECT c.* FROM carts c
             JOIN users u ON c.user_id = u.discord_id
             WHERE u.discord_id = ? AND c.status = ?
             ORDER BY c.created_at DESC LIMIT 1
         `;
-        cart = await db.get(query, [userId.toString(), 'active']);
+            cart = await db.get(query, [userId.toString(), 'active']);
 
-        console.log(`[DEBUG Cart.findActiveByUserId] Final result:`, cart ? `Cart ID ${cart.id}` : 'No active cart found');
-        return cart;
+            console.log(`[DEBUG Cart.findActiveByUserId] Final result:`, cart ? `Cart ID ${cart.id}` : 'No active cart found');
+            return cart;
 
-    } catch (error) {
-        console.error('Error finding active cart:', error);
-        throw error;
+        } catch (error) {
+            console.error('Error finding active cart:', error);
+            throw error;
+        }
     }
-}
 
     static async findByChannelId(channelId) {
         try {
@@ -55,28 +55,28 @@ static async findActiveByUserId(userId) {
         }
     }
 
-    static async create(userId, channelId) {
-    try {
-        console.log(`[DEBUG Cart.create] Creating cart for user: ${userId}, channel: ${channelId}`);
-        
-        // ⭐ CORREÇÃO: Remover updated_at da query
-        const query = `
-            INSERT INTO carts (user_id, ticket_channel_id, status, total_rp, total_price, created_at) 
-            VALUES (?, ?, 'active', 0, 0.00, CURRENT_TIMESTAMP)
+    static async create(userId, channelId, region = null) {
+        try {
+            console.log(`[DEBUG Cart.create] Creating cart for user: ${userId}, channel: ${channelId}, region: ${region}`);
+
+            // Update the SQL query to include the region column
+            const query = `
+            INSERT INTO carts (user_id, ticket_channel_id, status, total_rp, total_price, region, created_at) 
+            VALUES (?, ?, 'active', 0, 0.00, ?, CURRENT_TIMESTAMP)
         `;
-        
-        const result = await db.run(query, [userId, channelId]);
-        console.log(`[DEBUG Cart.create] Cart created with ID: ${result.lastID}`);
-        
-        const newCart = await this.findById(result.lastID);
-        console.log(`[DEBUG Cart.create] Retrieved new cart:`, newCart);
-        
-        return newCart;
-    } catch (error) {
-        console.error('Error creating cart:', error);
-        throw error;
+
+            const result = await db.run(query, [userId, channelId, region]);
+            console.log(`[DEBUG Cart.create] Cart created with ID: ${result.lastID}`);
+
+            const newCart = await this.findById(result.lastID);
+            console.log(`[DEBUG Cart.create] Retrieved new cart:`, newCart);
+
+            return newCart;
+        } catch (error) {
+            console.error('Error creating cart:', error);
+            throw error;
+        }
     }
-}
 
     static async updateStatus(id, status) {
         try {
@@ -89,33 +89,52 @@ static async findActiveByUserId(userId) {
         }
     }
 
-static async updateTotals(cartId, totalRP = null, totalPrice = null) {
-    try {
-        // If totals not provided, calculate them
-        if (totalRP === null || totalPrice === null) {
-            const items = await this.getItems(cartId);
-            totalRP = items.reduce((sum, item) => sum + item.skin_price, 0);
-            totalPrice = totalRP * 0.01;
-        }
-
-        // ⭐ CORREÇÃO: Verificar se a coluna updated_at existe
+    static async getAccountsByCartRegion(cartId) {
         try {
-            // Tentar com updated_at primeiro
-            const query = 'UPDATE carts SET total_rp = ?, total_price = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?';
-            const result = await db.run(query, [totalRP, totalPrice, cartId]);
-            return result.changes > 0;
-        } catch (updateError) {
-            // Se falhar (coluna não existe), tentar sem updated_at
-            console.log(`[DEBUG Cart.updateTotals] Trying without updated_at for cart ${cartId}`);
-            const query = 'UPDATE carts SET total_rp = ?, total_price = ? WHERE id = ?';
-            const result = await db.run(query, [totalRP, totalPrice, cartId]);
-            return result.changes > 0;
+            const cart = await this.findById(cartId);
+            if (!cart || !cart.region) {
+                // If no region specified, return all available accounts
+                return await Account.findAvailable();
+            }
+
+            // Get all available accounts
+            const allAccounts = await Account.findAvailable();
+
+            // Filter accounts by the cart's region
+            return allAccounts.filter(account => account.region === cart.region);
+        } catch (error) {
+            console.error('Error getting accounts by cart region:', error);
+            throw error;
         }
-    } catch (error) {
-        console.error('Error updating cart totals:', error);
-        throw error;
     }
-}
+
+    static async updateTotals(cartId, totalRP = null, totalPrice = null) {
+        try {
+            // If totals not provided, calculate them
+            if (totalRP === null || totalPrice === null) {
+                const items = await this.getItems(cartId);
+                totalRP = items.reduce((sum, item) => sum + item.skin_price, 0);
+                totalPrice = totalRP * 0.01;
+            }
+
+            // ⭐ CORREÇÃO: Verificar se a coluna updated_at existe
+            try {
+                // Tentar com updated_at primeiro
+                const query = 'UPDATE carts SET total_rp = ?, total_price = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?';
+                const result = await db.run(query, [totalRP, totalPrice, cartId]);
+                return result.changes > 0;
+            } catch (updateError) {
+                // Se falhar (coluna não existe), tentar sem updated_at
+                console.log(`[DEBUG Cart.updateTotals] Trying without updated_at for cart ${cartId}`);
+                const query = 'UPDATE carts SET total_rp = ?, total_price = ? WHERE id = ?';
+                const result = await db.run(query, [totalRP, totalPrice, cartId]);
+                return result.changes > 0;
+            }
+        } catch (error) {
+            console.error('Error updating cart totals:', error);
+            throw error;
+        }
+    }
 
     static async delete(id) {
         try {

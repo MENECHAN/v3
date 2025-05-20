@@ -1,5 +1,27 @@
 const db = require('./connection');
 
+async function fixCartsTableForRegion() {
+    try {
+        console.log('🔄 Verificando coluna region na tabela carts...');
+
+        const columns = await db.all("PRAGMA table_info(carts)");
+        const hasRegionColumn = columns.some(col => col.name === 'region');
+
+        if (!hasRegionColumn) {
+            console.log('⚠️ Coluna "region" não encontrada na tabela carts. Adicionando...');
+            await db.run('ALTER TABLE carts ADD COLUMN region TEXT');
+            console.log('✅ Coluna "region" adicionada à tabela carts com sucesso!');
+        } else {
+            console.log('ℹ️ Coluna "region" já existe na tabela carts.');
+        }
+
+        console.log('✅ Estrutura da tabela carts verificada e corrigida!');
+    } catch (error) {
+        console.error('❌ Erro ao adicionar coluna region:', error);
+        throw error;
+    }
+}
+
 // Função para verificar e atualizar a estrutura da tabela cart_items
 async function fixCartItemsTable() {
     try {
@@ -30,6 +52,8 @@ async function fixCartItemsTable() {
         throw error;
     }
 }
+
+
 
 async function fixCartsTable() {
     try {
@@ -354,6 +378,28 @@ async function addNotifiedColumnToFriendships() {
     }
 }
 
+async function fixAccountsTableForRegion() {
+    try {
+        console.log('🔄 Verificando coluna region na tabela accounts...');
+
+        const columns = await db.all("PRAGMA table_info(accounts)");
+        const hasRegionColumn = columns.some(col => col.name === 'region');
+
+        if (!hasRegionColumn) {
+            console.log('⚠️ Coluna "region" não encontrada na tabela accounts. Adicionando...');
+            await db.run('ALTER TABLE accounts ADD COLUMN region TEXT DEFAULT "BR"');
+            console.log('✅ Coluna "region" adicionada à tabela accounts com sucesso!');
+        } else {
+            console.log('ℹ️ Coluna "region" já existe na tabela accounts.');
+        }
+
+        console.log('✅ Estrutura da tabela accounts verificada e corrigida!');
+    } catch (error) {
+        console.error('❌ Erro ao adicionar coluna region:', error);
+        throw error;
+    }
+}
+
 async function applyDatabaseFixes() {
     try {
         console.log('🔄 Aplicando correções no banco de dados...');
@@ -362,8 +408,9 @@ async function applyDatabaseFixes() {
         await createFriendshipLogsTable();
         await createOrderLogsTable();
         await fixCartsTable();
-        await addNotificationColumnsToFriendships(); // ⭐ NOME MAIS DESCRITIVO
-        await addSelectedAccountIdToOrderLogs(); // ⭐ NOVA CORREÇÃO
+        await fixCartsTableForRegion(); // Add this line
+        await addNotificationColumnsToFriendships();
+        await addSelectedAccountIdToOrderLogs();
 
         console.log('✅ Todas as correções aplicadas com sucesso!');
     } catch (error) {

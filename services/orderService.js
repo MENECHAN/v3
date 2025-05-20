@@ -26,7 +26,7 @@ class OrderService {
                 return;
             }
 
-            // Buscar informações do usuário
+            // Get user information
             let userTag = order.user_id;
             try {
                 const discordUser = await client.users.fetch(order.user_id);
@@ -36,7 +36,7 @@ class OrderService {
                 console.error(`[ERROR OrderService] Error fetching user ${order.user_id}:`, userError);
             }
 
-            // ⭐ CORREÇÃO: Processar dados dos itens corretamente
+            // Process items data correctly
             let itemsDescription = 'Nenhum item encontrado';
             let itemCount = 0;
 
@@ -45,7 +45,7 @@ class OrderService {
             if (order.items_data) {
                 let parsedItems;
 
-                // Tentar fazer parse se for string
+                // Try to parse if it's a string
                 if (typeof order.items_data === 'string') {
                     try {
                         parsedItems = JSON.parse(order.items_data);
@@ -59,7 +59,7 @@ class OrderService {
                     console.log(`[DEBUG OrderService] Items already parsed:`, parsedItems);
                 }
 
-                // Processar itens
+                // Process items
                 if (Array.isArray(parsedItems) && parsedItems.length > 0) {
                     itemCount = parsedItems.length;
                     itemsDescription = parsedItems
@@ -74,7 +74,7 @@ class OrderService {
                 }
             }
 
-            // ⭐ CRIAR EMBED DETALHADO
+            // Create detailed embed
             const approvalEmbed = new EmbedBuilder()
                 .setTitle(`🧾 Comprovante para Aprovação`)
                 .setDescription(`**Pedido ID:** ${order.id}\n**Status:** Aguardando aprovação manual`)
@@ -118,7 +118,7 @@ class OrderService {
                 .setColor('#faa61a')
                 .setTimestamp();
 
-            // Adicionar comprovante
+            // Add payment proof
             if (order.payment_proof_url) {
                 approvalEmbed.setImage(order.payment_proof_url);
                 approvalEmbed.addFields([
@@ -127,22 +127,22 @@ class OrderService {
                 console.log(`[DEBUG OrderService] Payment proof attached: ${order.payment_proof_url}`);
             }
 
-            // ⭐ CRIAR BOTÕES COM IDs CORRETOS
+            // Create buttons with correct IDs
             const row = new ActionRowBuilder()
                 .addComponents(
                     new ButtonBuilder()
-                        .setCustomId(`approve_order_${order.id}`) // ⭐ FORMATO CORRETO
+                        .setCustomId(`approve_order_${order.id}`)
                         .setLabel('✅ Aprovar Pagamento')
                         .setStyle(ButtonStyle.Success),
                     new ButtonBuilder()
-                        .setCustomId(`reject_order_${order.id}`) // ⭐ FORMATO CORRETO
+                        .setCustomId(`reject_order_${order.id}`)
                         .setLabel('❌ Rejeitar Pagamento')
                         .setStyle(ButtonStyle.Danger)
                 );
 
             console.log(`[DEBUG OrderService] Button IDs created: approve_order_${order.id}, reject_order_${order.id}`);
 
-            // Enviar para canal de admin
+            // Send to admin channel
             const adminChannelId = config.adminLogChannelId || config.approvalNeededChannelId || config.orderApprovalChannelId;
             if (!adminChannelId) {
                 console.error(`[ERROR OrderService] No admin channel configured`);
@@ -153,13 +153,15 @@ class OrderService {
 
             const adminChannel = await client.channels.fetch(adminChannelId);
             if (adminChannel && adminChannel.isTextBased()) {
-                const sentMessage = await adminChannel.send({
+                // Use ClientMessageManager for admin notifications (always force a new message)
+                const ClientMessageManager = require('../services/clientMessageManager');
+                await ClientMessageManager.forceNewMessage(adminChannel, {
                     content: `🔔 **Novo comprovante para análise** - Pedido #${order.id}`,
                     embeds: [approvalEmbed],
                     components: [row]
-                });
+                }, `order_approval_${order.id}`);
 
-                console.log(`[DEBUG OrderService] Admin notification sent successfully. Message ID: ${sentMessage.id}`);
+                console.log(`[DEBUG OrderService] Admin notification sent successfully.`);
             } else {
                 console.error(`[ERROR OrderService] Admin channel not found or not text-based`);
             }
@@ -169,6 +171,7 @@ class OrderService {
             console.error('[ERROR OrderService] Error stack:', error.stack);
         }
     }
+
 
     static async approveOrder(interaction, orderId) {
         try {
@@ -195,7 +198,7 @@ class OrderService {
                 });
             }
 
-            // ⭐ RESPOSTA TEMPORÁRIA
+            // Temporary response
             const tempEmbed = new EmbedBuilder()
                 .setTitle('🔄 Processando Aprovação...')
                 .setDescription(`Pedido #${orderId} está sendo processado.\n\nBuscando contas do cliente...`)
@@ -209,7 +212,7 @@ class OrderService {
 
             console.log(`[DEBUG OrderService.approveOrder] Temporary response sent`);
 
-            // ⭐ BUSCAR USUÁRIO PELO DISCORD ID
+            // Find user by Discord ID
             const User = require('../models/User');
             const user = await User.findByDiscordId(order.user_id);
 
@@ -227,7 +230,7 @@ class OrderService {
                 });
             }
 
-            // ⭐ BUSCAR AMIZADES/CONTAS DO CLIENTE
+            // Find client's friendships/accounts
             const Friendship = require('../models/Friendship');
             const clientFriendships = await Friendship.findByUserId(user.id);
 
@@ -246,7 +249,7 @@ class OrderService {
                 });
             }
 
-            // ⭐ VERIFICAR TEMPO DE AMIZADE E SALDO DAS CONTAS
+            // Check friendship time and account balance
             const Account = require('../models/Account');
             const eligibleAccounts = [];
             const ineligibleAccounts = [];
@@ -257,7 +260,7 @@ class OrderService {
 
                 if (!account) continue;
 
-                // Calcular dias desde que foi adicionado
+                // Calculate days since added
                 const now = new Date();
                 const addedAt = new Date(friendship.added_at);
                 const daysSince = Math.floor((now - addedAt) / (1000 * 60 * 60 * 24));
@@ -271,7 +274,7 @@ class OrderService {
                     days_remaining: Math.max(0, minDays - daysSince)
                 };
 
-                // ⭐ VERIFICAR SE TEM TEMPO SUFICIENTE E RP
+                // Check time and RP
                 if (daysSince >= minDays && account.rp_amount >= order.total_rp) {
                     eligibleAccounts.push(friendshipData);
                     console.log(`[DEBUG] Account ${account.nickname}: ✅ Eligible (${daysSince} days, ${account.rp_amount} RP)`);
@@ -283,7 +286,7 @@ class OrderService {
 
             console.log(`[DEBUG] Found ${eligibleAccounts.length} eligible accounts, ${ineligibleAccounts.length} ineligible`);
 
-            // ⭐ SE NÃO HÁ CONTAS ELEGÍVEIS
+            // If no eligible accounts
             if (eligibleAccounts.length === 0) {
                 let reasonsText = '';
 
@@ -328,14 +331,14 @@ class OrderService {
                 return;
             }
 
-            // ⭐ ATUALIZAR STATUS PARA SELEÇÃO
+            // Update status for selection
             await OrderLog.updateStatus(orderId, 'AWAITING_ACCOUNT_SELECTION');
             console.log(`[DEBUG] Order status updated to AWAITING_ACCOUNT_SELECTION`);
 
-            // ⭐ CRIAR INTERFACE DE SELEÇÃO
+            // Create selection interface
             console.log(`[DEBUG] Creating selection interface for ${eligibleAccounts.length} accounts`);
 
-            // Se há apenas 1 conta elegível, processar diretamente
+            // If only 1 eligible account, process directly
             if (eligibleAccounts.length === 1) {
                 console.log(`[DEBUG] Only 1 eligible account, processing directly...`);
                 const account = eligibleAccounts[0];
@@ -381,10 +384,10 @@ class OrderService {
                 return;
             }
 
-            // ⭐ SE HÁ MÚLTIPLAS CONTAS, CRIAR BOTÕES
+            // For multiple accounts, create buttons
             console.log(`[DEBUG] Multiple eligible accounts (${eligibleAccounts.length}), creating selection interface...`);
 
-            // Criar botões para as contas elegíveis (máximo 5 por linha)
+            // Create buttons for eligible accounts (max 5 per row)
             const rows = [];
             let currentRow = new ActionRowBuilder();
             let buttonCount = 0;
@@ -399,7 +402,7 @@ class OrderService {
                 currentRow.addComponents(button);
                 buttonCount++;
 
-                // Se chegou a 5 botões ou é o último, adiciona a linha
+                // If reached 5 buttons or last one, add the row
                 if (buttonCount === 5 || index === eligibleAccounts.length - 1) {
                     rows.push(currentRow);
                     currentRow = new ActionRowBuilder();
@@ -407,12 +410,12 @@ class OrderService {
                 }
             });
 
-            // Limitar a 5 linhas (máximo do Discord)
+            // Limit to 5 rows (Discord max)
             if (rows.length > 5) {
                 rows.splice(5);
             }
 
-            // ⭐ EMBED COM INFORMAÇÕES DAS CONTAS
+            // Account information embed
             const selectionEmbed = new EmbedBuilder()
                 .setTitle(`✅ Pagamento Aprovado - Selecionar Conta`)
                 .setDescription(
@@ -436,7 +439,7 @@ class OrderService {
                 .setFooter({ text: `Admin: ${interaction.user.tag} | Pedido ID: ${orderId}` })
                 .setTimestamp();
 
-            // Mostrar contas inelegíveis se houver
+            // Show ineligible accounts if any
             if (ineligibleAccounts.length > 0) {
                 let ineligibleText = ineligibleAccounts.map(acc => {
                     const timeIssue = acc.days_since_added < minDays;
@@ -449,7 +452,7 @@ class OrderService {
                     return `**${acc.nickname}** - ${status}`;
                 }).join('\n');
 
-                // Truncar se muito longo
+                // Truncate if too long
                 if (ineligibleText.length > 1024) {
                     ineligibleText = ineligibleText.substring(0, 1021) + '...';
                 }
@@ -463,11 +466,43 @@ class OrderService {
                 ]);
             }
 
+            // Use ClientMessageManager for the admin reply
+            const ClientMessageManager = require('../services/clientMessageManager');
+
+            // For interaction replies, we don't need to use ClientMessageManager directly
+            // Just edit the reply as normal
             await interaction.editReply({
                 content: null,
                 embeds: [selectionEmbed],
                 components: rows
             });
+
+            // Use ClientMessageManager to send the notification to the order channel
+            if (order.order_channel_id) {
+                try {
+                    const orderChannel = await interaction.client.channels.fetch(order.order_channel_id);
+                    if (orderChannel && orderChannel.isTextBased()) {
+                        const notificationEmbed = new EmbedBuilder()
+                            .setTitle('✅ Pagamento Aprovado!')
+                            .setDescription(
+                                `Seu pagamento para o pedido **#${orderId}** foi aprovado!\n\n` +
+                                `💎 Total aprovado: ${order.total_rp.toLocaleString()} RP\n\n` +
+                                `⏳ Aguardando processamento final...`
+                            )
+                            .setColor('#57f287')
+                            .setTimestamp();
+
+                        await ClientMessageManager.updateOrderConfirmationMessage(
+                            orderChannel,
+                            notificationEmbed,
+                            [],
+                            orderId
+                        );
+                    }
+                } catch (notificationError) {
+                    console.error(`[ERROR] Could not send notification to order channel:`, notificationError);
+                }
+            }
 
             console.log(`[DEBUG] Account selection interface sent successfully with ${rows.length} button rows!`);
 
@@ -493,7 +528,7 @@ class OrderService {
                     });
                 }
             } catch (followUpError) {
-                console.error('[ERROR] Could not send error message:', followUpError);
+                console.error('[ERROR OrderService.approveOrder] FollowUp error:', followUpError);
             }
         }
     }
