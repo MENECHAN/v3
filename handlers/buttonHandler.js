@@ -673,6 +673,18 @@ async function handleAddAccount(interaction) {
     try {
         await interaction.deferReply({ ephemeral: true });
 
+        // Determinar a região (se veio do carrinho)
+        let region = null;
+        if (interaction.channelId) {
+            // Se o comando vem de um canal de carrinho, tenta pegar a região
+            const Cart = require('../models/Cart');
+            const cart = await Cart.findByChannelId(interaction.channelId);
+            if (cart && cart.region) {
+                region = cart.region;
+                console.log(`[DEBUG] Detected cart with region: ${region}`);
+            }
+        }
+
         // Create temporary channel for account selection
         const tempChannel = await interaction.guild.channels.create({
             name: `account-${interaction.user.username}`,
@@ -699,60 +711,90 @@ async function handleAddAccount(interaction) {
             ]
         });
 
-        // Get all accounts
-        const accounts = await Account.findAvailable();
+        // Get all accounts by region if specified
+        let accounts;
+        if (region) {
+            // Filtrar contas por região
+            accounts = await Account.findAvailableByRegion(region);
+            console.log(`[DEBUG] Found ${accounts.length} accounts in region ${region}`);
+        } else {
+            // Se não tem região, pegar todas as contas
+            accounts = await Account.findAvailable();
+            console.log(`[DEBUG] Found ${accounts.length} accounts in all regions`);
+        }
 
         if (accounts.length === 0) {
             await tempChannel.delete();
             return await interaction.editReply({
-                content: '❌ Nenhuma conta disponível no momento.'
+                content: region ? 
+                    `❌ Nenhuma conta disponível na região ${region} no momento.` : 
+                    '❌ Nenhuma conta disponível no momento.'
             });
         }
+
+        // Agrupar contas por região
+        const accountsByRegion = {};
+        accounts.forEach(account => {
+            const accRegion = account.region || 'Desconhecida';
+            if (!accountsByRegion[accRegion]) {
+                accountsByRegion[accRegion] = [];
+            }
+            accountsByRegion[accRegion].push(account);
+        });
 
         // Send account selection embed
         const embed = new EmbedBuilder()
             .setTitle('👥 Selecione uma Conta')
-            .setDescription('**Escolha uma conta para adicionar como amigo:**\n\n' +
-                'Clique no botão "Add Friend" da conta desejada.')
+            .setDescription(
+                `**Escolha uma conta para adicionar como amigo:**\n\n` +
+                `Clique no botão "Add Friend" da conta desejada.\n\n` +
+                (region ? `🌎 **Mostrando contas da região: ${region}**` : '🌎 **Contas de todas as regiões**')
+            )
             .setColor('#5865f2')
             .setTimestamp();
 
-        const accountFields = accounts.map(account => ({
-            name: `🎮 ${account.nickname}`,
-            value: `**RP:** ${account.rp_amount.toLocaleString()}\n` +
-                `**Amigos:** ${account.friends_count}/${account.max_friends}`,
-            inline: true
-        }));
-
-        embed.addFields(accountFields);
-
-        // Create buttons for each account
-        // ⭐ CORREÇÃO: Botão Close ÚNICO no final
-        // No buttonHandler.js, função handleAddAccount
+        // Adicionar um campo para cada região com suas contas
+        for (const [regionKey, regionAccounts] of Object.entries(accountsByRegion)) {
+            const accountDetails = regionAccounts.map(acc => 
+                `**${acc.nickname}**\n` +
+                `💎 ${acc.rp_amount.toLocaleString()} RP | 👥 Amigos: ${acc.friends_count}/${acc.max_friends}`
+            ).join('\n\n');
+            
+            embed.addFields([{
+                name: `🌎 Região: ${regionKey}`,
+                value: accountDetails,
+                inline: false
+            }]);
+        }
 
         // Create buttons for each account
         const rows = [];
-        let components = [];
+        for (const [regionKey, regionAccounts] of Object.entries(accountsByRegion)) {
+            let components = [];
+            
+            for (let i = 0; i < regionAccounts.length; i++) {
+                const account = regionAccounts[i];
+                
+                // Pular contas cheias
+                if (account.friends_count >= account.max_friends) continue;
 
-        for (let i = 0; i < accounts.length; i++) {
-            if (accounts[i].friends_count >= accounts[i].max_friends) continue;
+                components.push(
+                    new ButtonBuilder()
+                        .setCustomId(`add_friend_${account.id}`)
+                        .setLabel(`${account.nickname} (${regionKey})`)
+                        .setStyle(ButtonStyle.Primary)
+                );
 
-            components.push(
-                new ButtonBuilder()
-                    .setCustomId(`add_friend_${accounts[i].id}`)
-                    .setLabel(`Add Friend - ${accounts[i].nickname}`)
-                    .setStyle(ButtonStyle.Primary)
-            );
-
-            if (components.length === 5 || i === accounts.length - 1) {
-                if (components.length > 0) {
-                    rows.push(new ActionRowBuilder().addComponents(components));
-                    components = [];
+                if (components.length === 5 || i === regionAccounts.length - 1) {
+                    if (components.length > 0) {
+                        rows.push(new ActionRowBuilder().addComponents(components));
+                        components = [];
+                    }
                 }
             }
         }
 
-        // ⭐ ADICIONAR UM ÚNICO BOTÃO CLOSE NO FINAL
+        // Adicionar um único botão CLOSE no final
         const closeButton = new ActionRowBuilder()
             .addComponents(
                 new ButtonBuilder()
@@ -768,7 +810,7 @@ async function handleAddAccount(interaction) {
             components: rows
         });
 
-        // Auto-delete channel after 10 minutes (manter este código)
+        // Auto-delete channel after 10 minutes
         setTimeout(async () => {
             try {
                 if (tempChannel && !tempChannel.deleted) {
@@ -804,6 +846,7 @@ async function handleAddAccount(interaction) {
 
 async function handleAddFriend(interaction, accountId) {
     try {
+        // Obter informações da conta
         const account = await Account.findById(accountId);
 
         if (!account) {
@@ -820,10 +863,10 @@ async function handleAddFriend(interaction, accountId) {
             });
         }
 
-        // Create modal for LOL nickname input
+        // Criar modal para entrada de nickname LoL
         const modal = new ModalBuilder()
             .setCustomId(`lol_nickname_modal_${accountId}`)
-            .setTitle('Digite seu Nick do LoL');
+            .setTitle(`Adicionar ${account.nickname} (${account.region || 'Região não definida'})`);
 
         const nicknameInput = new TextInputBuilder()
             .setCustomId('lol_nickname')
@@ -1463,37 +1506,37 @@ async function handleConfirmCheckout(interaction, cartId) {
     // ⭐ FUNÇÃO SIMPLIFICADA
     // No final do buttonHandler.js:
 
-    async function handleCloseAccountTicket(interaction) {
-        try {
-            await interaction.deferUpdate();
+async function handleCloseAccountTicket(interaction) {
+    try {
+        await interaction.deferUpdate();
 
-            const embed = new EmbedBuilder()
-                .setTitle('🔒 Fechando Canal')
-                .setDescription('Este canal será fechado em 5 segundos...')
-                .setColor('#ed4245')
-                .setTimestamp();
+        const embed = new EmbedBuilder()
+            .setTitle('🔒 Fechando Canal')
+            .setDescription('Este canal será fechado em 5 segundos...')
+            .setColor('#ed4245')
+            .setTimestamp();
 
-            await interaction.editReply({
-                embeds: [embed],
-                components: []
-            });
+        await interaction.editReply({
+            embeds: [embed],
+            components: []
+        });
 
-            // Fechar canal após 5 segundos
-            setTimeout(async () => {
-                try {
-                    await interaction.channel.delete();
-                } catch (error) {
-                    console.error('Error deleting account channel:', error);
-                }
-            }, 5000);
+        // Fechar canal após 5 segundos
+        setTimeout(async () => {
+            try {
+                await interaction.channel.delete();
+            } catch (error) {
+                console.error('Error deleting account channel:', error);
+            }
+        }, 5000);
 
-        } catch (error) {
-            console.error('Error closing account ticket:', error);
-            await interaction.followUp({
-                content: '❌ Erro ao fechar canal.',
-                ephemeral: true
-            });
-        }
+    } catch (error) {
+        console.error('Error closing account ticket:', error);
+        await interaction.followUp({
+            content: '❌ Erro ao fechar canal.',
+            ephemeral: true
+        });
     }
+}
 
 }

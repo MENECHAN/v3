@@ -109,12 +109,15 @@ async function handleSearchCategoryModal(interaction) {
     }
 }
 
+
+
 async function handleLolNicknameModal(interaction) {
     try {
         const accountId = interaction.customId.split('_')[3];
         const lolNickname = interaction.fields.getTextInputValue('lol_nickname');
 
-        // Validate riot tag format
+        // Validar formato do Riot tag
+        const { validateRiotTag } = require('../utils/validators');
         if (!validateRiotTag(lolNickname)) {
             return await interaction.reply({
                 content: '❌ Formato inválido! Use o formato: NickName#TAG (ex: Player#BR1)',
@@ -122,9 +125,56 @@ async function handleLolNicknameModal(interaction) {
             });
         }
 
+        // Verificar se a conta existe
+        const Account = require('../models/Account');
+        const account = await Account.findById(accountId);
+        
+        if (!account) {
+            return await interaction.reply({
+                content: '❌ Conta não encontrada no sistema.',
+                ephemeral: true
+            });
+        }
+
+        // Verificar se a conta tem espaço para mais amigos
+        if (account.friends_count >= account.max_friends) {
+            return await interaction.reply({
+                content: `❌ A conta ${account.nickname} já está com a lista de amigos lotada (${account.friends_count}/${account.max_friends}).`,
+                ephemeral: true
+            });
+        }
+
         const [nickname, tag] = lolNickname.split('#');
 
+        // Verificar se o nickname tem formato válido para a região da conta
+        if (account.region) {
+            // Para regiões NA, EUW, etc, as tags são diferentes
+            const regionTags = {
+                'BR': ['BR1', 'BR'],
+                'NA': ['NA1', 'NA'],
+                'EUW': ['EUW1', 'EUW'],
+                'EUNE': ['EUN1', 'EUNE'],
+                'LAS': ['LA2', 'LAS'],
+                'LAN': ['LA1', 'LAN'],
+                'OCE': ['OC1', 'OCE'],
+                'JP': ['JP1', 'JP'],
+                'KR': ['KR', 'KR1'],
+                'TR': ['TR1', 'TR'],
+                'RU': ['RU', 'RU1']
+            };
+            
+            // Verificar se a tag é válida para a região da conta
+            const validTags = regionTags[account.region] || [];
+            if (validTags.length > 0 && !validTags.includes(tag.toUpperCase())) {
+                return await interaction.reply({
+                    content: `❌ A tag "${tag}" não parece ser válida para a região ${account.region}.\nTags válidas para ${account.region}: ${validTags.join(', ')}`,
+                    ephemeral: true
+                });
+            }
+        }
+
         // Processar através do FriendshipService
+        const FriendshipService = require('../services/friendshipService');
         await FriendshipService.requestFriendship(interaction, accountId, nickname, tag);
 
     } catch (error) {

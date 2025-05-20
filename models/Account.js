@@ -84,25 +84,39 @@ class Account {
     }
 
 
+    static async getAvailableRegions() {
+        try {
+            const query = 'SELECT DISTINCT region FROM accounts WHERE region IS NOT NULL ORDER BY region ASC';
+            const result = await db.all(query);
+            return result.map(row => row.region).filter(Boolean);
+        } catch (error) {
+            console.error('Error getting available regions:', error);
+            return [];
+        }
+    }
+
     static async findByRegion(region) {
         try {
-            const query = 'SELECT * FROM accounts WHERE region = ? ORDER BY friends_count ASC';
+            const query = 'SELECT * FROM accounts WHERE region = ? ORDER BY nickname ASC';
             return await db.all(query, [region]);
         } catch (error) {
             console.error('Error finding accounts by region:', error);
-            throw error;
+            return [];
         }
     }
 
 
-
     static async findAvailableByRegion(region) {
         try {
+            if (!region) {
+                return this.findAvailable();
+            }
+
             const query = 'SELECT * FROM accounts WHERE region = ? AND friends_count < max_friends ORDER BY friends_count ASC';
             return await db.all(query, [region]);
         } catch (error) {
             console.error('Error finding available accounts by region:', error);
-            throw error;
+            return [];
         }
     }
 
@@ -143,6 +157,17 @@ class Account {
         } catch (error) {
             console.error('Error decrementing friend count:', error);
             throw error;
+        }
+    }
+
+    static async updateRegion(accountId, region) {
+        try {
+            const query = 'UPDATE accounts SET region = ? WHERE id = ?';
+            const result = await db.run(query, [region, accountId]);
+            return result.changes > 0;
+        } catch (error) {
+            console.error('Error updating account region:', error);
+            return false;
         }
     }
 
@@ -197,6 +222,36 @@ class Account {
         } catch (error) {
             console.error('Error counting accounts:', error);
             throw error;
+        }
+    }
+
+    static async getRegionStatistics() {
+        try {
+            const query = `
+            SELECT 
+                region, 
+                COUNT(*) as total_accounts,
+                SUM(friends_count) as total_friends,
+                AVG(friends_count) as avg_friends,
+                SUM(rp_amount) as total_rp
+            FROM accounts 
+            GROUP BY region
+            ORDER BY region ASC
+        `;
+
+            const result = await db.all(query);
+
+            // Processar resultados
+            return result.map(row => ({
+                region: row.region || 'Sem região',
+                totalAccounts: row.total_accounts || 0,
+                totalFriends: row.total_friends || 0,
+                avgFriends: parseFloat(row.avg_friends || 0).toFixed(1),
+                totalRP: row.total_rp || 0
+            }));
+        } catch (error) {
+            console.error('Error getting region statistics:', error);
+            return [];
         }
     }
 

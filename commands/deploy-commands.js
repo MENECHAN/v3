@@ -30,6 +30,29 @@ const commands = [
                         .setDescription('Quantidade de amigos atual')
                         .setRequired(true)
                 )
+                .addStringOption(option =>
+                    option.setName('region')
+                        .setDescription('Região da conta')
+                        .setRequired(true)
+                        .addChoices(
+                            { name: 'Brasil (BR)', value: 'BR' },
+                            { name: 'América do Norte (NA)', value: 'NA' },
+                            { name: 'Europa Oeste (EUW)', value: 'EUW' },
+                            { name: 'Europa Nordeste (EUNE)', value: 'EUNE' },
+                            { name: 'América Latina Sul (LAS)', value: 'LAS' },
+                            { name: 'América Latina Norte (LAN)', value: 'LAN' },
+                            { name: 'Oceania (OCE)', value: 'OCE' },
+                            { name: 'Japão (JP)', value: 'JP' },
+                            { name: 'Coreia (KR)', value: 'KR' },
+                            { name: 'Turquia (TR)', value: 'TR' },
+                            { name: 'Rússia (RU)', value: 'RU' }
+                        )
+                )
+                .addIntegerOption(option =>
+                    option.setName('max_friends')
+                        .setDescription('Quantidade máxima de amigos (padrão: 250)')
+                        .setRequired(false)
+                )
         )
         .addSubcommand(subcommand =>
             subcommand
@@ -65,11 +88,67 @@ const commands = [
                         .setDescription('Nova quantidade de amigos')
                         .setRequired(false)
                 )
+                .addIntegerOption(option =>
+                    option.setName('max_friends')
+                        .setDescription('Nova quantidade máxima de amigos')
+                        .setRequired(false)
+                )
         )
         .addSubcommand(subcommand =>
             subcommand
                 .setName('list')
                 .setDescription('Lista todas as contas')
+                .addStringOption(option =>
+                    option.setName('region')
+                        .setDescription('Filtrar por região')
+                        .setRequired(false)
+                        .addChoices(
+                            { name: 'Brasil (BR)', value: 'BR' },
+                            { name: 'América do Norte (NA)', value: 'NA' },
+                            { name: 'Europa Oeste (EUW)', value: 'EUW' },
+                            { name: 'Europa Nordeste (EUNE)', value: 'EUNE' },
+                            { name: 'América Latina Sul (LAS)', value: 'LAS' },
+                            { name: 'América Latina Norte (LAN)', value: 'LAN' },
+                            { name: 'Oceania (OCE)', value: 'OCE' },
+                            { name: 'Japão (JP)', value: 'JP' },
+                            { name: 'Coreia (KR)', value: 'KR' },
+                            { name: 'Turquia (TR)', value: 'TR' },
+                            { name: 'Rússia (RU)', value: 'RU' }
+                        )
+                )
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('region')
+                .setDescription('Gerencia região de uma conta')
+                .addIntegerOption(option =>
+                    option.setName('id')
+                        .setDescription('ID da conta')
+                        .setRequired(true)
+                )
+                .addStringOption(option =>
+                    option.setName('region')
+                        .setDescription('Nova região da conta')
+                        .setRequired(true)
+                        .addChoices(
+                            { name: 'Brasil (BR)', value: 'BR' },
+                            { name: 'América do Norte (NA)', value: 'NA' },
+                            { name: 'Europa Oeste (EUW)', value: 'EUW' },
+                            { name: 'Europa Nordeste (EUNE)', value: 'EUNE' },
+                            { name: 'América Latina Sul (LAS)', value: 'LAS' },
+                            { name: 'América Latina Norte (LAN)', value: 'LAN' },
+                            { name: 'Oceania (OCE)', value: 'OCE' },
+                            { name: 'Japão (JP)', value: 'JP' },
+                            { name: 'Coreia (KR)', value: 'KR' },
+                            { name: 'Turquia (TR)', value: 'TR' },
+                            { name: 'Rússia (RU)', value: 'RU' }
+                        )
+                )
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('region-stats')
+                .setDescription('Exibe estatísticas de contas por região')
         ),
 
     new SlashCommandBuilder()
@@ -127,6 +206,24 @@ const commands = [
                         .setDescription('Usuário para verificar')
                         .setRequired(true)
                 )
+                .addStringOption(option =>
+                    option.setName('region')
+                        .setDescription('Filtrar por região')
+                        .setRequired(false)
+                        .addChoices(
+                            { name: 'Brasil (BR)', value: 'BR' },
+                            { name: 'América do Norte (NA)', value: 'NA' },
+                            { name: 'Europa Oeste (EUW)', value: 'EUW' },
+                            { name: 'Europa Nordeste (EUNE)', value: 'EUNE' },
+                            { name: 'América Latina Sul (LAS)', value: 'LAS' },
+                            { name: 'América Latina Norte (LAN)', value: 'LAN' },
+                            { name: 'Oceania (OCE)', value: 'OCE' },
+                            { name: 'Japão (JP)', value: 'JP' },
+                            { name: 'Coreia (KR)', value: 'KR' },
+                            { name: 'Turquia (TR)', value: 'TR' },
+                            { name: 'Rússia (RU)', value: 'RU' }
+                        )
+                )
         )
         .addSubcommand(subcommand =>
             subcommand
@@ -179,7 +276,7 @@ const commands = [
                 .setDescription('Importa configuração de preços')
         ),
 
-    // ⭐ COMANDO DE LOGS DE AMIZADES
+    // Comando de logs de amizades
     new SlashCommandBuilder()
         .setName('friendship-logs')
         .setDescription('Mostra logs e estatísticas de amizades')
@@ -188,6 +285,24 @@ const commands = [
             subcommand
                 .setName('stats')
                 .setDescription('Estatísticas gerais de amizades')
+                .addStringOption(option =>
+                    option.setName('region')
+                        .setDescription('Filtrar por região')
+                        .setRequired(false)
+                        .addChoices(
+                            { name: 'Brasil (BR)', value: 'BR' },
+                            { name: 'América do Norte (NA)', value: 'NA' },
+                            { name: 'Europa Oeste (EUW)', value: 'EUW' },
+                            { name: 'Europa Nordeste (EUNE)', value: 'EUNE' },
+                            { name: 'América Latina Sul (LAS)', value: 'LAS' },
+                            { name: 'América Latina Norte (LAN)', value: 'LAN' },
+                            { name: 'Oceania (OCE)', value: 'OCE' },
+                            { name: 'Japão (JP)', value: 'JP' },
+                            { name: 'Coreia (KR)', value: 'KR' },
+                            { name: 'Turquia (TR)', value: 'TR' },
+                            { name: 'Rússia (RU)', value: 'RU' }
+                        )
+                )
         )
         .addSubcommand(subcommand =>
             subcommand
@@ -197,6 +312,24 @@ const commands = [
                     option.setName('limit')
                         .setDescription('Número de amizades a mostrar (padrão: 10)')
                         .setRequired(false)
+                )
+                .addStringOption(option =>
+                    option.setName('region')
+                        .setDescription('Filtrar por região')
+                        .setRequired(false)
+                        .addChoices(
+                            { name: 'Brasil (BR)', value: 'BR' },
+                            { name: 'América do Norte (NA)', value: 'NA' },
+                            { name: 'Europa Oeste (EUW)', value: 'EUW' },
+                            { name: 'Europa Nordeste (EUNE)', value: 'EUNE' },
+                            { name: 'América Latina Sul (LAS)', value: 'LAS' },
+                            { name: 'América Latina Norte (LAN)', value: 'LAN' },
+                            { name: 'Oceania (OCE)', value: 'OCE' },
+                            { name: 'Japão (JP)', value: 'JP' },
+                            { name: 'Coreia (KR)', value: 'KR' },
+                            { name: 'Turquia (TR)', value: 'TR' },
+                            { name: 'Rússia (RU)', value: 'RU' }
+                        )
                 )
         )
         .addSubcommand(subcommand =>
@@ -208,14 +341,50 @@ const commands = [
                         .setDescription('Usuário para verificar')
                         .setRequired(true)
                 )
+                .addStringOption(option =>
+                    option.setName('region')
+                        .setDescription('Filtrar por região')
+                        .setRequired(false)
+                        .addChoices(
+                            { name: 'Brasil (BR)', value: 'BR' },
+                            { name: 'América do Norte (NA)', value: 'NA' },
+                            { name: 'Europa Oeste (EUW)', value: 'EUW' },
+                            { name: 'Europa Nordeste (EUNE)', value: 'EUNE' },
+                            { name: 'América Latina Sul (LAS)', value: 'LAS' },
+                            { name: 'América Latina Norte (LAN)', value: 'LAN' },
+                            { name: 'Oceania (OCE)', value: 'OCE' },
+                            { name: 'Japão (JP)', value: 'JP' },
+                            { name: 'Coreia (KR)', value: 'KR' },
+                            { name: 'Turquia (TR)', value: 'TR' },
+                            { name: 'Rússia (RU)', value: 'RU' }
+                        )
+                )
         )
         .addSubcommand(subcommand =>
             subcommand
                 .setName('pending')
                 .setDescription('Pedidos de amizade pendentes')
+                .addStringOption(option =>
+                    option.setName('region')
+                        .setDescription('Filtrar por região')
+                        .setRequired(false)
+                        .addChoices(
+                            { name: 'Brasil (BR)', value: 'BR' },
+                            { name: 'América do Norte (NA)', value: 'NA' },
+                            { name: 'Europa Oeste (EUW)', value: 'EUW' },
+                            { name: 'Europa Nordeste (EUNE)', value: 'EUNE' },
+                            { name: 'América Latina Sul (LAS)', value: 'LAS' },
+                            { name: 'América Latina Norte (LAN)', value: 'LAN' },
+                            { name: 'Oceania (OCE)', value: 'OCE' },
+                            { name: 'Japão (JP)', value: 'JP' },
+                            { name: 'Coreia (KR)', value: 'KR' },
+                            { name: 'Turquia (TR)', value: 'TR' },
+                            { name: 'Rússia (RU)', value: 'RU' }
+                        )
+                )
         ),
 
-    // ⭐ COMANDO DE FATURAMENTO
+    // Comando de faturamento
     new SlashCommandBuilder()
         .setName('revenue')
         .setDescription('Mostra estatísticas completas de faturamento da loja')
@@ -237,9 +406,27 @@ const commands = [
                 .setRequired(false)
                 .setMinValue(1)
                 .setMaxValue(10)
+        )
+        .addStringOption(option =>
+            option.setName('region')
+                .setDescription('Filtrar por região')
+                .setRequired(false)
+                .addChoices(
+                    { name: 'Brasil (BR)', value: 'BR' },
+                    { name: 'América do Norte (NA)', value: 'NA' },
+                    { name: 'Europa Oeste (EUW)', value: 'EUW' },
+                    { name: 'Europa Nordeste (EUNE)', value: 'EUNE' },
+                    { name: 'América Latina Sul (LAS)', value: 'LAS' },
+                    { name: 'América Latina Norte (LAN)', value: 'LAN' },
+                    { name: 'Oceania (OCE)', value: 'OCE' },
+                    { name: 'Japão (JP)', value: 'JP' },
+                    { name: 'Coreia (KR)', value: 'KR' },
+                    { name: 'Turquia (TR)', value: 'TR' },
+                    { name: 'Rússia (RU)', value: 'RU' }
+                )
         ),
 
-    // ⭐ COMANDO DE NOTIFICAÇÕES DE AMIZADE (NOVO)
+    // Comando de notificações de amizade
     new SlashCommandBuilder()
         .setName('friendship-notifications')
         .setDescription('Gerencia notificações de amizade')
@@ -248,11 +435,47 @@ const commands = [
             subcommand
                 .setName('stats')
                 .setDescription('Mostra estatísticas do serviço de notificação')
+                .addStringOption(option =>
+                    option.setName('region')
+                        .setDescription('Filtrar por região')
+                        .setRequired(false)
+                        .addChoices(
+                            { name: 'Brasil (BR)', value: 'BR' },
+                            { name: 'América do Norte (NA)', value: 'NA' },
+                            { name: 'Europa Oeste (EUW)', value: 'EUW' },
+                            { name: 'Europa Nordeste (EUNE)', value: 'EUNE' },
+                            { name: 'América Latina Sul (LAS)', value: 'LAS' },
+                            { name: 'América Latina Norte (LAN)', value: 'LAN' },
+                            { name: 'Oceania (OCE)', value: 'OCE' },
+                            { name: 'Japão (JP)', value: 'JP' },
+                            { name: 'Coreia (KR)', value: 'KR' },
+                            { name: 'Turquia (TR)', value: 'TR' },
+                            { name: 'Rússia (RU)', value: 'RU' }
+                        )
+                )
         )
         .addSubcommand(subcommand =>
             subcommand
                 .setName('check')
                 .setDescription('Verifica amizades elegíveis agora')
+                .addStringOption(option =>
+                    option.setName('region')
+                        .setDescription('Filtrar por região')
+                        .setRequired(false)
+                        .addChoices(
+                            { name: 'Brasil (BR)', value: 'BR' },
+                            { name: 'América do Norte (NA)', value: 'NA' },
+                            { name: 'Europa Oeste (EUW)', value: 'EUW' },
+                            { name: 'Europa Nordeste (EUNE)', value: 'EUNE' },
+                            { name: 'América Latina Sul (LAS)', value: 'LAS' },
+                            { name: 'América Latina Norte (LAN)', value: 'LAN' },
+                            { name: 'Oceania (OCE)', value: 'OCE' },
+                            { name: 'Japão (JP)', value: 'JP' },
+                            { name: 'Coreia (KR)', value: 'KR' },
+                            { name: 'Turquia (TR)', value: 'TR' },
+                            { name: 'Rússia (RU)', value: 'RU' }
+                        )
+                )
         )
         .addSubcommand(subcommand =>
             subcommand
@@ -268,7 +491,25 @@ const commands = [
             subcommand
                 .setName('reset')
                 .setDescription('Reseta todas as notificações (CUIDADO!)')
-        )
+                .addStringOption(option =>
+                    option.setName('region')
+                        .setDescription('Filtrar por região (deixe em branco para todas)')
+                        .setRequired(false)
+                        .addChoices(
+                            { name: 'Brasil (BR)', value: 'BR' },
+                            { name: 'América do Norte (NA)', value: 'NA' },
+                            { name: 'Europa Oeste (EUW)', value: 'EUW' },
+                            { name: 'Europa Nordeste (EUNE)', value: 'EUNE' },
+                            { name: 'América Latina Sul (LAS)', value: 'LAS' },
+                            { name: 'América Latina Norte (LAN)', value: 'LAN' },
+                            { name: 'Oceania (OCE)', value: 'OCE' },
+                            { name: 'Japão (JP)', value: 'JP' },
+                            { name: 'Coreia (KR)', value: 'KR' },
+                            { name: 'Turquia (TR)', value: 'TR' },
+                            { name: 'Rússia (RU)', value: 'RU' }
+                        )
+                )
+        ),
 ];
 
 const rest = new REST().setToken(config.token);
