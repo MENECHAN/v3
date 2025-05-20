@@ -1,0 +1,19 @@
+
+{
+  "name": "pawstore",
+  "version": "1.0.0",
+  "description": "Bot Discord para compra de skins do League of Legends",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "deploy": "node commands/deploy-commands.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "sqlite3": "^5.1.6",
+    "node-fetch": "^3.3.2"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

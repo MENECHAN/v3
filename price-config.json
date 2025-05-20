@@ -1,0 +1,94 @@
+{
+  "currency": "RP",
+  "defaultPrices": {
+    "inventoryTypes": {
+      "CHAMPION": 585,
+      "CHAMPION_SKIN": 975,
+      "BUNDLES": 1200,
+      "WARD_SKIN": 640,
+      "SUMMONER_ICON": 250,
+      "EMOTE": 350,
+      "HEXTECH_CRAFTING": 125,
+      "ETERNALS": 590,
+      "TFT_MAP_SKIN": 490,
+      "TFT_DAMAGE_SKIN": 790,
+      "COMPANION": 850
+    },
+    "itemCategories": {
+      "ULTIMATE_SKIN": 3250,
+      "LEGENDARY_SKIN": 1820,
+      "EPIC_SKIN": 1350,
+      "RARE_SKIN": 975,
+      "COMMON_SKIN": 750,
+      "BUDGET_SKIN": 520,
+      "CHROMA": 290,
+      "PRESTIGE_SKIN": 2000,
+      "MYTHIC_SKIN": 2500,
+      "CHAMPION": 585,
+      "REGULAR_BUNDLE": 1500,
+      "CHROMA_BUNDLE": 975,
+      "SKIN_BUNDLE": 2000,
+      "CHAMPION_BUNDLE": 1800,
+      "EVENT_BUNDLE": 1650,
+      "WARD_SKIN": 640,
+      "SUMMONER_ICON": 250,
+      "EMOTE": 350,
+      "HEXTECH_CHEST": 125,
+      "HEXTECH_KEY": 125,
+      "GEMSTONE": 1680,
+      "LOOT_ORBS": 250,
+      "ETERNALS": 590,
+      "TFT_MAP_SKIN": 490,
+      "TFT_DAMAGE_SKIN": 790,
+      "COMPANION": 850
+    },
+    "subInventoryTypes": {
+      "RECOLOR": 290,
+      "SKIN_BUNDLE": 2000,
+      "HEXTECH_BUNDLE": 1500,
+      "CHROMA_BUNDLE": 975,
+      "SKIN_VARIANT_BUNDLE": 1350,
+      "PROMO_BUNDLE": 1200,
+      "RUNE_PAGE_BUNDLE": 590,
+      "CHAMPION_BUNDLE": 1800,
+      "CHEST": 125,
+      "MATERIAL": 195,
+      "TFT_PASS": 1350,
+      "LOL_EVENT_PASS": 1650
+    }
+  },
+  "itemOverrides": {
+    "example_item_id": 1350
+  },
+  "fallbackPrice": 0,
+  "priceMultipliers": {
+    "PRESTIGE": 1.5,
+    "MYTHIC": 2.0,
+    "LIMITED_EDITION": 1.3,
+    "LEGACY": 1.1,
+    "VAULT": 1.2,
+    "ESPORTS": 1.25
+  },
+  "categoryPriority": [
+    "itemOverrides",
+    "itemCategories", 
+    "subInventoryTypes",
+    "inventoryTypes",
+    "fallbackPrice"
+  ],
+  "autoUpdate": {
+    "enabled": true,
+    "priceInflation": 0.02,
+    "lastUpdate": null
+  },
+  "validation": {
+    "minPrice": 0,
+    "maxPrice": 10000,
+    "allowZeroPrices": true,
+    "requirePriceForCategories": [
+      "ULTIMATE_SKIN",
+      "LEGENDARY_SKIN",
+      "EPIC_SKIN"
+    ]
+  }
+}
