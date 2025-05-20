@@ -16,6 +16,7 @@ const FriendshipNotificationService = require('./services/FriendshipNotification
 
 // Check if required files exist
 const requiredFiles = [
+    './database/init.js',
     './database/connection.js',
     './database/migrations.js',
     './handlers/buttonHandler.js',
@@ -48,6 +49,7 @@ const modalHandler = require('./handlers/modalHandler');
 const sendPanelCommand = require('./commands/slash/send-panel');
 const accountCommand = require('./commands/slash/account');
 const priceManageCommand = require('./commands/slash/price-manage');
+const { initializeDatabase } = require('./database/init');
 
 // Initialize client
 const client = new Client({
@@ -72,6 +74,7 @@ client.once('ready', async () => {
         await Database.initialize();
         await applyDatabaseFixes();
         await runMigrations();
+        await initializeDatabase();
         console.log('✅ Database initialized!');
     } catch (error) {
         console.error('❌ Database initialization failed:', error);
