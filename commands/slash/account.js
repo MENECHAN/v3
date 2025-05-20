@@ -92,6 +92,8 @@ async function handleRemoveAccount(interaction) {
     }
 }
 
+
+
 async function handleEditAccount(interaction) {
     const accountId = interaction.options.getInteger('id');
     const nickname = interaction.options.getString('nickname');

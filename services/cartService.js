@@ -17,7 +17,7 @@ class CartService {
 
             // Buscar carrinho
             const cart = await Cart.findById(cartId);
-            console.log(`[DEBUG CartService.sendCheckoutEmbed] Cart retrieval:`, cart ? `Status: ${cart.status}, User: ${cart.user_id}` : 'null');
+            console.log(`[DEBUG CartService.sendCheckoutEmbed] Cart retrieval:`, cart ? `Status: ${cart.status}, User: ${cart.user_id}, Region: ${cart.region}` : 'null');
 
             if (!cart) {
                 const content = '❌ Carrinho não encontrado.';
@@ -63,20 +63,48 @@ class CartService {
             }
 
             // Buscar amizades do cliente
-            const clientFriendships = await Friendship.findByUserId(user.id);
-            console.log(`[DEBUG CartService.sendCheckoutEmbed] Found ${clientFriendships.length} friendships`);
+            let clientFriendships = await Friendship.findByUserId(user.id);
+            console.log(`[DEBUG CartService.sendCheckoutEmbed] Found ${clientFriendships.length} friendships initially`);
+
+            // ⭐ FILTRAR CONTAS PELA REGIÃO DO CARRINHO, SE ESPECIFICADA
+            if (cart.region) {
+                console.log(`[DEBUG CartService.sendCheckoutEmbed] Filtering accounts by region: ${cart.region}`);
+                const filteredFriendships = [];
+
+                for (const friendship of clientFriendships) {
+                    const account = await Account.findById(friendship.account_id);
+
+                    // Só adicionar contas da mesma região
+                    if (account && account.region === cart.region) {
+                        filteredFriendships.push(friendship);
+                    }
+                }
+
+                clientFriendships = filteredFriendships;
+                console.log(`[DEBUG CartService.sendCheckoutEmbed] Filtered to ${clientFriendships.length} friendships in region ${cart.region}`);
+            }
 
             if (clientFriendships.length === 0) {
                 const noAccountsEmbed = new EmbedBuilder()
-                    .setTitle('❌ Nenhuma Conta Adicionada')
+                    .setTitle(cart.region ?
+                        `❌ Nenhuma Conta na Região ${cart.region}` :
+                        '❌ Nenhuma Conta Adicionada')
                     .setDescription(
-                        '**Você não possui contas adicionadas ao sistema.**\n\n' +
-                        '🎮 Para fazer pedidos, você precisa:\n' +
-                        '1. Clicar em **"Add Account"** no painel principal\n' +
-                        '2. Selecionar uma conta disponível\n' +
-                        '3. Adicionar ela como amigo no LoL\n' +
-                        '4. Aguardar aprovação\n\n' +
-                        '💡 Após adicionar contas, você poderá fazer checkout normalmente.'
+                        cart.region ?
+                            `**Você não possui contas adicionadas na região ${cart.region}.**\n\n` +
+                            '🎮 Para fazer pedidos nesta região, você precisa:\n' +
+                            '1. Clicar em **"Add Account"** no painel principal\n' +
+                            `2. Selecionar uma conta disponível na região **${cart.region}**\n` +
+                            '3. Adicionar ela como amigo no LoL\n' +
+                            '4. Aguardar aprovação\n\n' +
+                            '💡 Você também pode criar um carrinho em outra região se preferir.' :
+                            '**Você não possui contas adicionadas ao sistema.**\n\n' +
+                            '🎮 Para fazer pedidos, você precisa:\n' +
+                            '1. Clicar em **"Add Account"** no painel principal\n' +
+                            '2. Selecionar uma conta disponível\n' +
+                            '3. Adicionar ela como amigo no LoL\n' +
+                            '4. Aguardar aprovação\n\n' +
+                            '💡 Após adicionar contas, você poderá fazer checkout normalmente.'
                     )
                     .setColor('#ed4245')
                     .setTimestamp();
@@ -138,7 +166,7 @@ class CartService {
                 const notEligibleEmbed = new EmbedBuilder()
                     .setTitle('⏰ Contas Não Elegíveis')
                     .setDescription(
-                        `**Suas contas ainda não podem receber presentes.**\n\n` +
+                        `**Suas contas${cart.region ? ` na região ${cart.region}` : ''} ainda não podem receber presentes.**\n\n` +
                         `**Requisito:** Mínimo ${minDays} dias de amizade\n\n` +
                         `**Status das suas contas:**\n\n${reasonsText}` +
                         `💡 **Aguarde o tempo necessário e tente novamente.**`
@@ -194,7 +222,8 @@ class CartService {
                 .setTitle('🛒 Checkout - Selecionar Conta de Destino')
                 .setDescription(
                     `**Selecione qual das suas contas irá receber os presentes:**\n\n` +
-                    `💡 Apenas contas com ${minDays}+ dias de amizade podem receber presentes.`
+                    `💡 Apenas contas com ${minDays}+ dias de amizade podem receber presentes.` +
+                    (cart.region ? `\n🌎 **Região do carrinho: ${cart.region}**` : '')
                 )
                 .addFields([
                     {
@@ -219,7 +248,7 @@ class CartService {
                     }
                 ])
                 .setColor('#57f287')
-                .setFooter({ text: `Carrinho ID: ${cartId}` })
+                .setFooter({ text: `Carrinho ID: ${cartId}${cart.region ? ` | Região: ${cart.region}` : ''}` })
                 .setTimestamp();
 
             // ⭐ MOSTRAR CONTAS INELEGÍVEIS SE HOUVER
@@ -297,9 +326,16 @@ class CartService {
                 .setColor('#5865f2')
                 .setTimestamp();
 
+            // Adicionar região se disponível
+            if (cart.region) {
+                embed.setDescription(`**Região:** ${cart.region}`);
+            }
+
             if (items.length === 0) {
-                embed.setDescription('**Seu carrinho está vazio**\n\n' +
-                    'Clique em "Add Item" para adicionar items ao seu carrinho.');
+                const description = cart.region ?
+                    `**Região:** ${cart.region}\n\n**Seu carrinho está vazio**\n\nClique em "Add Item" para adicionar items ao seu carrinho.` :
+                    '**Seu carrinho está vazio**\n\nClique em "Add Item" para adicionar items ao seu carrinho.';
+                embed.setDescription(description);
             } else {
                 let itemsList = '';
                 items.forEach((item, index) => {
@@ -308,7 +344,8 @@ class CartService {
                         `💎 ${item.skin_price.toLocaleString()} RP - ${(item.skin_price * 0.01).toFixed(2)}€\n\n`;
                 });
 
-                embed.setDescription(`Just click on search button to find your items.`);
+                const regionText = cart.region ? `**Região:** ${cart.region}\n\n` : '';
+                embed.setDescription(`${regionText}${itemsList}`);
                 embed.addFields(
                     {
                         name: '💎 Total RP',

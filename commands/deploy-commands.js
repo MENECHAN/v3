@@ -218,27 +218,25 @@ const commands = [
     // ⭐ COMANDO DE FATURAMENTO
     new SlashCommandBuilder()
         .setName('revenue')
-        .setDescription('Mostra estatísticas de faturamento da loja')
+        .setDescription('Mostra estatísticas completas de faturamento da loja')
         .setDefaultMemberPermissions(0)
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('summary')
-                .setDescription('Resumo geral do faturamento')
-        )
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('detailed')
-                .setDescription('Faturamento detalhado por período')
-        )
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('top-clients')
-                .setDescription('Top clientes por faturamento')
-                .addIntegerOption(option =>
-                    option.setName('limit')
-                        .setDescription('Número de clientes a mostrar (padrão: 10)')
-                        .setRequired(false)
+        .addIntegerOption(option =>
+            option.setName('dias')
+                .setDescription('Período para analisar (dias, padrão: 30)')
+                .setRequired(false)
+                .addChoices(
+                    { name: 'Últimos 7 dias', value: 7 },
+                    { name: 'Últimos 30 dias', value: 30 },
+                    { name: 'Últimos 90 dias', value: 90 },
+                    { name: 'Ano inteiro', value: 365 }
                 )
+        )
+        .addIntegerOption(option =>
+            option.setName('top_clientes')
+                .setDescription('Número de top clientes a mostrar (padrão: 5)')
+                .setRequired(false)
+                .setMinValue(1)
+                .setMaxValue(10)
         ),
 
     // ⭐ COMANDO DE NOTIFICAÇÕES DE AMIZADE (NOVO)

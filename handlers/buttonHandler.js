@@ -21,6 +21,21 @@ module.exports = {
         const [action, ...params] = interaction.customId.split('_');
         console.log(`[DEBUG] Parsed action: ${action}, params:`, params);
 
+        if (action === 'select' && params[0] === 'region') {
+            await handleRegionSelection(interaction);
+            return;
+        } else if (action === 'open' && params[0] === 'cart' && params[1] === 'region') {
+            // Handler para botão no painel principal que leva à seleção de região
+            await handleOpenCartWithRegion(interaction);
+            return;
+        } else if (action === 'confirm' && params[0] === 'region') {
+            // Handler para confirmar uma região selecionada
+            const region = params[1];
+            const originalButtonId = params.slice(2).join('_');
+            await handleConfirmRegion(interaction, region, originalButtonId);
+            return;
+        }
+
         // ⭐ CORRIGIR HANDLERS DE PEDIDOS
         if (action === 'approve' && params[0] === 'order') {
             const orderId = params[1];
@@ -444,6 +459,149 @@ async function handleSearchPage(interaction, cartId, category, page, encodedQuer
         console.error('Error handling search page:', error);
         await interaction.followUp({
             content: '❌ Erro ao carregar página.',
+            ephemeral: true
+        });
+    }
+}
+
+async function handleOpenCartWithRegion(interaction) {
+    try {
+        await interaction.deferReply({ ephemeral: true });
+
+        const embed = new EmbedBuilder()
+            .setTitle('🌎 Selecione uma Região')
+            .setDescription('**Escolha a região para seu carrinho:**\n\n' +
+                'A região selecionada determinará quais contas estarão disponíveis para você.')
+            .setColor('#5865f2')
+            .setTimestamp();
+
+        // Criar botões para cada região
+        const row1 = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`confirm_region_BR_open_cart`)
+                    .setLabel('Brasil')
+                    .setEmoji('🇧🇷')
+                    .setStyle(ButtonStyle.Primary),
+                new ButtonBuilder()
+                    .setCustomId(`confirm_region_NA_open_cart`)
+                    .setLabel('América do Norte')
+                    .setEmoji('🇺🇸')
+                    .setStyle(ButtonStyle.Primary),
+                new ButtonBuilder()
+                    .setCustomId(`confirm_region_EUW_open_cart`)
+                    .setLabel('Europa Oeste')
+                    .setEmoji('🇪🇺')
+                    .setStyle(ButtonStyle.Primary)
+            );
+
+        // Adicionar uma segunda linha com mais regiões
+        const row2 = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`confirm_region_EUNE_open_cart`)
+                    .setLabel('Europa Nórdica')
+                    .setEmoji('🇪🇺')
+                    .setStyle(ButtonStyle.Primary),
+                new ButtonBuilder()
+                    .setCustomId(`confirm_region_LAS_open_cart`)
+                    .setLabel('América Latina Sul')
+                    .setEmoji('🇦🇷')
+                    .setStyle(ButtonStyle.Primary),
+                new ButtonBuilder()
+                    .setCustomId(`confirm_region_LAN_open_cart`)
+                    .setLabel('América Latina Norte')
+                    .setEmoji('🇲🇽')
+                    .setStyle(ButtonStyle.Primary)
+            );
+
+        await interaction.editReply({
+            embeds: [embed],
+            components: [row1, row2]
+        });
+
+    } catch (error) {
+        console.error('Error handling region selection:', error);
+        await interaction.followUp({
+            content: '❌ Erro ao processar seleção de região.',
+            ephemeral: true
+        });
+    }
+}
+
+async function handleConfirmRegion(interaction, region, originalButtonId) {
+    try {
+        await interaction.deferUpdate();
+
+        console.log(`[DEBUG] Region selected: ${region} for action: ${originalButtonId}`);
+
+        // Com base no botão original, executar a ação adequada
+        if (originalButtonId === 'open_cart') {
+            // Abrir um carrinho com a região selecionada
+            await handleOpenCartWithSelectedRegion(interaction, region);
+        } else {
+            // Para outros casos futuros
+            console.log(`[DEBUG] Unhandled original button: ${originalButtonId}`);
+            await interaction.followUp({
+                content: '❌ Ação não implementada para esta região.',
+                ephemeral: true
+            });
+        }
+
+    } catch (error) {
+        console.error('Error handling region confirmation:', error);
+        await interaction.followUp({
+            content: '❌ Erro ao confirmar região.',
+            ephemeral: true
+        });
+    }
+}
+
+async function handleOpenCartWithSelectedRegion(interaction, region) {
+    try {
+        // Criar ou obter usuário - CORREÇÃO: Verificar se findOrCreate retorna o Discord ID
+        const user = await User.findOrCreate(interaction.user.id, interaction.user.username);
+        console.log(`[DEBUG] User found/created:`, user);
+
+        // CORREÇÃO: Usar interaction.user.id diretamente para buscar carrinho
+        let cart = await Cart.findActiveByUserId(interaction.user.id);
+        console.log(`[DEBUG] Active cart found:`, cart ? `ID ${cart.id}` : 'None');
+
+        if (cart) {
+            // Check if channel still exists
+            const existingChannel = interaction.guild.channels.cache.get(cart.ticket_channel_id);
+            if (existingChannel) {
+                return await interaction.followUp({
+                    content: `❌ Você já tem um carrinho ativo em ${existingChannel}`,
+                    ephemeral: true
+                });
+            } else {
+                // Channel was deleted, create new cart
+                await Cart.delete(cart.id);
+                cart = null;
+            }
+        }
+
+        // Create new ticket channel with region
+        const ticketChannel = await TicketService.createTicket(interaction.guild, interaction.user, region);
+
+        // CORREÇÃO: Usar interaction.user.id para criar carrinho
+        cart = await Cart.create(interaction.user.id, ticketChannel.id, region);
+        console.log(`[DEBUG] New cart created with ID: ${cart.id} and region: ${region}`);
+
+        // Send initial cart embed
+        await CartService.sendCartEmbed(ticketChannel, cart);
+
+        await interaction.followUp({
+            content: `✅ Carrinho criado na região **${region}**! Acesse ${ticketChannel}`,
+            ephemeral: true
+        });
+    } catch (error) {
+        console.error('Error opening cart with region:', error);
+        console.error('Error details:', error.stack);
+
+        await interaction.followUp({
+            content: '❌ Erro ao abrir carrinho com região selecionada.',
             ephemeral: true
         });
     }

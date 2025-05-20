@@ -5,27 +5,25 @@ const db = require('../../database/connection');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('revenue')
-        .setDescription('Mostra estatísticas de faturamento da loja')
+        .setDescription('Mostra estatísticas completas de faturamento da loja')
         .setDefaultMemberPermissions(0)
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('summary')
-                .setDescription('Resumo geral do faturamento')
-        )
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('detailed')
-                .setDescription('Faturamento detalhado por período')
-        )
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('top-clients')
-                .setDescription('Top clientes por faturamento')
-                .addIntegerOption(option =>
-                    option.setName('limit')
-                        .setDescription('Número de clientes a mostrar (padrão: 10)')
-                        .setRequired(false)
+        .addIntegerOption(option =>
+            option.setName('dias')
+                .setDescription('Período para analisar (dias, padrão: 30)')
+                .setRequired(false)
+                .addChoices(
+                    { name: 'Últimos 7 dias', value: 7 },
+                    { name: 'Últimos 30 dias', value: 30 },
+                    { name: 'Últimos 90 dias', value: 90 },
+                    { name: 'Ano inteiro', value: 365 }
                 )
+        )
+        .addIntegerOption(option =>
+            option.setName('top_clientes')
+                .setDescription('Número de top clientes a mostrar (padrão: 5)')
+                .setRequired(false)
+                .setMinValue(1)
+                .setMaxValue(10)
         ),
 
     async execute(interaction) {
@@ -37,103 +35,95 @@ module.exports = {
             });
         }
 
-        const subcommand = interaction.options.getSubcommand();
+        try {
+            await interaction.deferReply({ ephemeral: true });
+            
+            // Obter parâmetros
+            const days = interaction.options.getInteger('dias') || 30;
+            const topClientsLimit = interaction.options.getInteger('top_clientes') || 5;
+            
+            // Criar embed principal
+            const mainEmbed = new EmbedBuilder()
+                .setTitle('💰 Dashboard Financeiro')
+                .setDescription(`Relatório financeiro completo da loja.\nPeríodo analisado: últimos **${days} dias**`)
+                .setColor('#57f287')
+                .setThumbnail(interaction.guild.iconURL())
+                .setFooter({ text: 'Sistema PawStore - Relatório Financeiro' })
+                .setTimestamp();
 
-        switch (subcommand) {
-            case 'summary':
-                await handleRevenueSummary(interaction);
-                break;
-            case 'detailed':
-                await handleDetailedRevenue(interaction);
-                break;
-            case 'top-clients':
-                await handleTopClients(interaction);
-                break;
-        }
-    }
-};
+            // SEÇÃO 1: RESUMO GERAL
+            // -----------------------------
+            
+            // Faturamento total (todos os tempos)
+            const totalRevenue = await db.get(`
+                SELECT 
+                    COUNT(*) as total_orders,
+                    SUM(total_price) as total_revenue,
+                    SUM(total_rp) as total_rp,
+                    MAX(total_price) as highest_order,
+                    AVG(total_price) as avg_order
+                FROM order_logs 
+                WHERE status = 'COMPLETED'
+            `);
 
-async function handleRevenueSummary(interaction) {
-    try {
-        await interaction.deferReply({ ephemeral: true });
+            // Faturamento no período especificado
+            const periodRevenue = await db.get(`
+                SELECT 
+                    COUNT(*) as orders,
+                    SUM(total_price) as revenue,
+                    SUM(total_rp) as rp
+                FROM order_logs 
+                WHERE status = 'COMPLETED' 
+                AND created_at >= datetime('now', '-${days} days')
+            `);
+            
+            // Pedidos pendentes
+            const pendingOrders = await db.get(`
+                SELECT COUNT(*) as count
+                FROM order_logs 
+                WHERE status IN ('PENDING_PAYMENT_PROOF', 'PENDING_MANUAL_APPROVAL', 'AWAITING_ACCOUNT_SELECTION')
+            `);
 
-        // Faturamento total
-        const totalRevenue = await db.get(`
-            SELECT 
-                COUNT(*) as total_orders,
-                SUM(total_price) as total_revenue,
-                SUM(total_rp) as total_rp
-            FROM order_logs 
-            WHERE status = 'COMPLETED'
-        `);
+            // Hoje
+            const todayRevenue = await db.get(`
+                SELECT 
+                    COUNT(*) as orders,
+                    SUM(total_price) as revenue
+                FROM order_logs 
+                WHERE status = 'COMPLETED' 
+                AND date(created_at) = date('now')
+            `);
 
-        // Faturamento hoje
-        const todayRevenue = await db.get(`
-            SELECT 
-                COUNT(*) as orders,
-                SUM(total_price) as revenue,
-                SUM(total_rp) as rp
-            FROM order_logs 
-            WHERE status = 'COMPLETED' 
-            AND date(created_at) = date('now')
-        `);
+            // Calcular crescimento em relação ao período anterior igual
+            const previousPeriodRevenue = await db.get(`
+                SELECT SUM(total_price) as revenue
+                FROM order_logs 
+                WHERE status = 'COMPLETED' 
+                AND created_at >= datetime('now', '-${days*2} days')
+                AND created_at < datetime('now', '-${days} days')
+            `);
 
-        // Faturamento na última semana
-        const weekRevenue = await db.get(`
-            SELECT 
-                COUNT(*) as orders,
-                SUM(total_price) as revenue,
-                SUM(total_rp) as rp
-            FROM order_logs 
-            WHERE status = 'COMPLETED' 
-            AND created_at >= datetime('now', '-7 days')
-        `);
-
-        // Faturamento no último mês
-        const monthRevenue = await db.get(`
-            SELECT 
-                COUNT(*) as orders,
-                SUM(total_price) as revenue,
-                SUM(total_rp) as rp
-            FROM order_logs 
-            WHERE status = 'COMPLETED' 
-            AND created_at >= datetime('now', '-30 days')
-        `);
-
-        // Ticket médio
-        const avgTicket = totalRevenue.total_orders > 0 ? 
-            (totalRevenue.total_revenue / totalRevenue.total_orders) : 0;
-
-        // Pedidos pendentes
-        const pendingOrders = await db.get(`
-            SELECT COUNT(*) as count
-            FROM order_logs 
-            WHERE status IN ('PENDING_PAYMENT_PROOF', 'PENDING_MANUAL_APPROVAL', 'AWAITING_ACCOUNT_SELECTION')
-        `);
-
-        // Crescimento semanal
-        const lastWeekRevenue = await db.get(`
-            SELECT SUM(total_price) as revenue
-            FROM order_logs 
-            WHERE status = 'COMPLETED' 
-            AND created_at >= datetime('now', '-14 days')
-            AND created_at < datetime('now', '-7 days')
-        `);
-
-        const weekGrowth = lastWeekRevenue && lastWeekRevenue.revenue > 0 ? 
-            ((weekRevenue.revenue - lastWeekRevenue.revenue) / lastWeekRevenue.revenue * 100) : 0;
-
-        const embed = new EmbedBuilder()
-            .setTitle('💰 Resumo do Faturamento')
-            .setColor('#57f287')
-            .addFields([
+            const growthRate = previousPeriodRevenue && previousPeriodRevenue.revenue > 0 ? 
+                ((periodRevenue.revenue - previousPeriodRevenue.revenue) / previousPeriodRevenue.revenue * 100) : 0;
+            
+            // Adicionar campos ao embed
+            mainEmbed.addFields([
                 {
-                    name: '📊 Total Geral',
+                    name: '📊 Resumo dos Últimos ' + days + ' Dias',
                     value: 
-                        `**Pedidos:** ${totalRevenue.total_orders || 0}\n` +
-                        `**Faturamento:** €${(totalRevenue.total_revenue || 0).toFixed(2)}\n` +
-                        `**RP Vendido:** ${(totalRevenue.total_rp || 0).toLocaleString()}\n` +
-                        `**Ticket Médio:** €${avgTicket.toFixed(2)}`,
+                        `**Pedidos:** ${periodRevenue.orders || 0}\n` +
+                        `**Faturamento:** €${(periodRevenue.revenue || 0).toFixed(2)}\n` +
+                        `**RP Vendido:** ${(periodRevenue.rp || 0).toLocaleString()}\n` +
+                        `**Crescimento:** ${growthRate > 0 ? '📈 +' : '📉 '}${growthRate.toFixed(1)}%`,
+                    inline: true
+                },
+                {
+                    name: '💹 Estatísticas Gerais',
+                    value: 
+                        `**Total de Pedidos:** ${totalRevenue.total_orders || 0}\n` +
+                        `**Faturamento Total:** €${(totalRevenue.total_revenue || 0).toFixed(2)}\n` +
+                        `**Ticket Médio:** €${(totalRevenue.avg_order || 0).toFixed(2)}\n` +
+                        `**Maior Pedido:** €${(totalRevenue.highest_order || 0).toFixed(2)}`,
                     inline: true
                 },
                 {
@@ -141,313 +131,182 @@ async function handleRevenueSummary(interaction) {
                     value: 
                         `**Pedidos:** ${todayRevenue.orders || 0}\n` +
                         `**Faturamento:** €${(todayRevenue.revenue || 0).toFixed(2)}\n` +
-                        `**RP Vendido:** ${(todayRevenue.rp || 0).toLocaleString()}`,
-                    inline: true
-                },
-                {
-                    name: '📆 Última Semana',
-                    value: 
-                        `**Pedidos:** ${weekRevenue.orders || 0}\n` +
-                        `**Faturamento:** €${(weekRevenue.revenue || 0).toFixed(2)}\n` +
-                        `**RP Vendido:** ${(weekRevenue.rp || 0).toLocaleString()}\n` +
-                        `**Crescimento:** ${weekGrowth > 0 ? '+' : ''}${weekGrowth.toFixed(1)}%`,
-                    inline: true
-                },
-                {
-                    name: '🗓️ Último Mês',
-                    value: 
-                        `**Pedidos:** ${monthRevenue.orders || 0}\n` +
-                        `**Faturamento:** €${(monthRevenue.revenue || 0).toFixed(2)}\n` +
-                        `**RP Vendido:** ${(monthRevenue.rp || 0).toLocaleString()}`,
-                    inline: true
-                },
-                {
-                    name: '⏳ Status Atual',
-                    value: 
-                        `**Pedidos pendentes:** ${pendingOrders.count || 0}\n` +
-                        `**Sistema:** 🟢 Operacional\n` +
-                        `**Último update:** <t:${Math.floor(Date.now() / 1000)}:R>`,
-                    inline: true
-                },
-                {
-                    name: '📈 Performance',
-                    value: 
-                        `**Taxa de conversão:** ${totalRevenue.total_orders > 0 ? ((totalRevenue.total_orders / (totalRevenue.total_orders + (pendingOrders.count || 0))) * 100).toFixed(1) : 0}%\n` +
-                        `**Maior pedido:** €${totalRevenue.total_revenue > 0 ? (totalRevenue.total_revenue / Math.max(totalRevenue.total_orders, 1)).toFixed(2) : '0.00'}\n` +
-                        `**RP por €:** ${totalRevenue.total_revenue > 0 ? Math.round(totalRevenue.total_rp / totalRevenue.total_revenue) : 0}`,
+                        `**Pendentes:** ${pendingOrders.count || 0}`,
                     inline: true
                 }
-            ])
-            .setThumbnail(interaction.guild.iconURL())
-            .setFooter({ text: 'Sistema PawStore - Relatório Financeiro' })
-            .setTimestamp();
+            ]);
 
-        await interaction.editReply({ embeds: [embed] });
-    } catch (error) {
-        console.error('Error getting revenue summary:', error);
-        await interaction.editReply({ content: '❌ Erro ao obter resumo financeiro.' });
-    }
-}
+            // SEÇÃO 2: DESEMPENHO DIÁRIO
+            // -----------------------------
+            
+            // Limitar a 7 dias para não sobrecarregar o embed
+            const daysToShow = Math.min(days, 7);
+            
+            // Faturamento por dia 
+            const dailyRevenue = await db.all(`
+                SELECT 
+                    date(created_at) as day,
+                    COUNT(*) as orders,
+                    SUM(total_price) as revenue
+                FROM order_logs 
+                WHERE status = 'COMPLETED' 
+                AND created_at >= datetime('now', '-${daysToShow} days')
+                GROUP BY date(created_at)
+                ORDER BY day DESC
+            `);
 
-async function handleDetailedRevenue(interaction) {
-    try {
-        await interaction.deferReply({ ephemeral: true });
+            if (dailyRevenue && dailyRevenue.length > 0) {
+                let dailyChart = '';
+                
+                for (const day of dailyRevenue) {
+                    const date = new Date(day.day);
+                    const formattedDate = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth()+1).toString().padStart(2, '0')}`;
+                    const barLength = Math.round((day.revenue / (periodRevenue.revenue / daysToShow)) * 10);
+                    const bar = '▓'.repeat(Math.min(barLength, 15)) || '▁';
+                    
+                    dailyChart += `**${formattedDate}:** ${bar} €${day.revenue.toFixed(2)} (${day.orders} pedidos)\n`;
+                }
+                
+                mainEmbed.addFields([{
+                    name: '📈 Desempenho Diário',
+                    value: dailyChart || 'Sem dados para o período',
+                    inline: false
+                }]);
+            }
 
-        // Faturamento por dia (últimos 7 dias)
-        const dailyRevenue = await db.all(`
-            SELECT 
-                date(created_at) as day,
-                COUNT(*) as orders,
-                SUM(total_price) as revenue,
-                SUM(total_rp) as rp,
-                AVG(total_price) as avg_ticket
-            FROM order_logs 
-            WHERE status = 'COMPLETED' 
-            AND created_at >= datetime('now', '-7 days')
-            GROUP BY date(created_at)
-            ORDER BY day DESC
-        `);
+            // SEÇÃO 3: TOP CLIENTES
+            // -----------------------------
+            
+            const topClients = await db.all(`
+                SELECT 
+                    ol.user_id,
+                    COUNT(*) as order_count,
+                    SUM(ol.total_price) as total_spent,
+                    MAX(ol.created_at) as last_order
+                FROM order_logs ol
+                WHERE ol.status = 'COMPLETED'
+                AND ol.created_at >= datetime('now', '-${days} days')
+                GROUP BY ol.user_id
+                ORDER BY total_spent DESC
+                LIMIT ?
+            `, [topClientsLimit]);
 
-        // Faturamento por semana (últimas 4 semanas)
-        const weeklyRevenue = await db.all(`
-            SELECT 
-                strftime('%Y-W%W', created_at) as week,
-                COUNT(*) as orders,
-                SUM(total_price) as revenue,
-                SUM(total_rp) as rp,
-                AVG(total_price) as avg_ticket
-            FROM order_logs 
-            WHERE status = 'COMPLETED' 
-            AND created_at >= datetime('now', '-28 days')
-            GROUP BY strftime('%Y-W%W', created_at)
-            ORDER BY week DESC
-        `);
+            if (topClients && topClients.length > 0) {
+                let clientsList = '';
+                
+                for (let i = 0; i < topClients.length; i++) {
+                    const client = topClients[i];
+                    let username = 'Usuário ID: ' + client.user_id;
+                    
+                    try {
+                        const discordUser = await interaction.client.users.fetch(client.user_id);
+                        username = discordUser.username;
+                    } catch (error) {
+                        console.log(`Could not fetch user ${client.user_id}`);
+                    }
+                    
+                    const lastOrderDate = new Date(client.last_order);
+                    const formattedDate = `${lastOrderDate.getDate().toString().padStart(2, '0')}/${(lastOrderDate.getMonth()+1).toString().padStart(2, '0')}`;
+                    
+                    // Determinar badge do cliente com base no valor gasto
+                    let badge = '';
+                    if (client.total_spent >= 100) badge = '💎';
+                    else if (client.total_spent >= 50) badge = '🥇';
+                    else if (client.total_spent >= 25) badge = '🥈';
+                    else badge = '🥉';
+                    
+                    clientsList += `${badge} **${i+1}. ${username}** - €${client.total_spent.toFixed(2)} (${client.order_count} pedidos)\n`;
+                }
+                
+                mainEmbed.addFields([{
+                    name: '👑 Top Clientes - Últimos ' + days + ' Dias',
+                    value: clientsList || 'Sem dados para o período',
+                    inline: false
+                }]);
+            }
 
-        // Faturamento por mês (últimos 6 meses)
-        const monthlyRevenue = await db.all(`
-            SELECT 
-                strftime('%Y-%m', created_at) as month,
-                COUNT(*) as orders,
-                SUM(total_price) as revenue,
-                SUM(total_rp) as rp,
-                AVG(total_price) as avg_ticket
-            FROM order_logs 
-            WHERE status = 'COMPLETED' 
-            AND created_at >= datetime('now', '-6 months')
-            GROUP BY strftime('%Y-%m', created_at)
-            ORDER BY month DESC
-        `);
+            // SEÇÃO 4: MÉTODOS DE PAGAMENTO E RP CONSUMIDO
+            // -----------------------------
+            
+            // Análise de RP consumido por conta (top 3)
+            const topRpAccounts = await db.all(`
+                SELECT 
+                    a.nickname as account_name,
+                    SUM(ol.total_rp) as rp_used
+                FROM order_logs ol
+                JOIN accounts a ON ol.debited_from_account_id = a.id
+                WHERE ol.status = 'COMPLETED'
+                AND ol.created_at >= datetime('now', '-${days} days')
+                GROUP BY ol.debited_from_account_id
+                ORDER BY rp_used DESC
+                LIMIT 3
+            `);
 
-        // Horários de pico
-        const hourlyRevenue = await db.all(`
-            SELECT 
-                strftime('%H', created_at) as hour,
-                COUNT(*) as orders,
-                SUM(total_price) as revenue
-            FROM order_logs 
-            WHERE status = 'COMPLETED' 
-            AND created_at >= datetime('now', '-7 days')
-            GROUP BY strftime('%H', created_at)
-            ORDER BY orders DESC
-            LIMIT 3
-        `);
+            if (topRpAccounts && topRpAccounts.length > 0) {
+                const rpList = topRpAccounts.map((acc, index) => 
+                    `**${index+1}.** ${acc.account_name || 'Conta desconhecida'} - ${acc.rp_used.toLocaleString()} RP`
+                ).join('\n');
+                
+                mainEmbed.addFields([{
+                    name: '💎 Contas Mais Utilizadas',
+                    value: rpList || 'Sem dados disponíveis',
+                    inline: true
+                }]);
+            }
 
-        const embed = new EmbedBuilder()
-            .setTitle('📈 Faturamento Detalhado')
-            .setColor('#5865f2')
-            .setTimestamp();
+            // Horários de pico
+            const peakHours = await db.all(`
+                SELECT 
+                    strftime('%H', created_at) as hour,
+                    COUNT(*) as orders,
+                    SUM(total_price) as revenue
+                FROM order_logs 
+                WHERE status = 'COMPLETED' 
+                AND created_at >= datetime('now', '-${days} days')
+                GROUP BY strftime('%H', created_at)
+                ORDER BY orders DESC
+                LIMIT 3
+            `);
 
-        // Últimos 7 dias
-        if (dailyRevenue.length > 0) {
-            const dailyText = dailyRevenue.map(day => {
-                const date = new Date(day.day + 'T00:00:00Z');
-                const formattedDate = date.toLocaleDateString('pt-BR', { 
-                    weekday: 'short', 
-                    day: '2-digit', 
-                    month: '2-digit' 
-                });
-                return `**${formattedDate}:** ${day.orders} pedidos - €${day.revenue.toFixed(2)} (avg: €${day.avg_ticket.toFixed(2)})`;
-            }).join('\n');
+            if (peakHours && peakHours.length > 0) {
+                const hoursList = peakHours.map((hour, index) => 
+                    `**${hour.hour}h** - ${hour.orders} pedidos (€${hour.revenue.toFixed(2)})`
+                ).join('\n');
+                
+                mainEmbed.addFields([{
+                    name: '⏰ Horários de Pico',
+                    value: hoursList || 'Sem dados disponíveis',
+                    inline: true
+                }]);
+            }
 
-            embed.addFields([{
-                name: '📅 Últimos 7 Dias',
-                value: dailyText.length > 1024 ? dailyText.substring(0, 1021) + '...' : dailyText,
+            // SEÇÃO 5: PREVISÃO E STATUS DO SISTEMA
+            // -----------------------------
+            
+            // Estimativa do próximo período
+            let estimatedRevenue = 0;
+            if (periodRevenue && periodRevenue.revenue) {
+                // Calculando uma estimativa simples com base na taxa de crescimento
+                estimatedRevenue = periodRevenue.revenue * (1 + (growthRate / 100));
+            }
+            
+            mainEmbed.addFields([{
+                name: '🔮 Previsão e Status',
+                value: 
+                    `**Previsão ${days} dias:** €${estimatedRevenue.toFixed(2)}\n` +
+                    `**Status do Sistema:** 🟢 Operacional\n` +
+                    `**Última Atualização:** <t:${Math.floor(Date.now()/1000)}:R>`,
                 inline: false
             }]);
-        }
 
-        // Últimas 4 semanas
-        if (weeklyRevenue.length > 0) {
-            const weeklyText = weeklyRevenue.map((week, index) => {
-                const weekNum = week.week.split('-W')[1];
-                return `**Semana ${weekNum}:** ${week.orders} pedidos - €${week.revenue.toFixed(2)} (avg: €${week.avg_ticket.toFixed(2)})`;
-            }).join('\n');
-
-            embed.addFields([{
-                name: '📆 Últimas 4 Semanas',
-                value: weeklyText.length > 1024 ? weeklyText.substring(0, 1021) + '...' : weeklyText,
-                inline: false
-            }]);
-        }
-
-        // Últimos 6 meses
-        if (monthlyRevenue.length > 0) {
-            const monthlyText = monthlyRevenue.map(month => {
-                const [year, monthNum] = month.month.split('-');
-                const monthName = new Date(year, monthNum - 1).toLocaleDateString('pt-BR', { 
-                    month: 'long', year: 'numeric' 
-                });
-                return `**${monthName}:** ${month.orders} pedidos - €${month.revenue.toFixed(2)} (avg: €${month.avg_ticket.toFixed(2)})`;
-            }).join('\n');
-
-            embed.addFields([{
-                name: '🗓️ Últimos 6 Meses',
-                value: monthlyText.length > 1024 ? monthlyText.substring(0, 1021) + '...' : monthlyText,
-                inline: false
-            }]);
-        }
-
-        // Horários de pico
-        if (hourlyRevenue.length > 0) {
-            const hourlyText = hourlyRevenue.map((hour, index) => {
-                const icons = ['🥇', '🥈', '🥉'];
-                return `${icons[index]} **${hour.hour}:00h** - ${hour.orders} pedidos (€${hour.revenue.toFixed(2)})`;
-            }).join('\n');
-
-            embed.addFields([{
-                name: '🕐 Horários de Pico (últimos 7 dias)',
-                value: hourlyText,
-                inline: false
-            }]);
-        }
-
-        if (dailyRevenue.length === 0 && weeklyRevenue.length === 0 && monthlyRevenue.length === 0) {
-            embed.setDescription('ℹ️ Nenhum dado de faturamento encontrado.');
-        }
-
-        await interaction.editReply({ embeds: [embed] });
-    } catch (error) {
-        console.error('Error getting detailed revenue:', error);
-        await interaction.editReply({ content: '❌ Erro ao obter faturamento detalhado.' });
-    }
-}
-
-async function handleTopClients(interaction) {
-    try {
-        await interaction.deferReply({ ephemeral: true });
-
-        const limit = interaction.options.getInteger('limit') || 10;
-
-        const topClients = await db.all(`
-            SELECT 
-                ol.user_id,
-                COUNT(*) as order_count,
-                SUM(ol.total_price) as total_spent,
-                SUM(ol.total_rp) as total_rp,
-                AVG(ol.total_price) as avg_ticket,
-                MAX(ol.created_at) as last_order,
-                MIN(ol.created_at) as first_order
-            FROM order_logs ol
-            WHERE ol.status = 'COMPLETED'
-            GROUP BY ol.user_id
-            ORDER BY total_spent DESC
-            LIMIT ?
-        `, [limit]);
-
-        if (topClients.length === 0) {
-            return await interaction.editReply({ 
-                content: 'ℹ️ Nenhum cliente encontrado.' 
+            // Enviar o embed
+            await interaction.editReply({ embeds: [mainEmbed] });
+            
+        } catch (error) {
+            console.error('Error generating revenue report:', error);
+            await interaction.editReply({ 
+                content: '❌ Erro ao gerar relatório de faturamento: ' + error.message
             });
         }
-
-        // Estatísticas gerais
-        const totalRevenue = topClients.reduce((sum, client) => sum + client.total_spent, 0);
-        const totalOrders = topClients.reduce((sum, client) => sum + client.order_count, 0);
-
-        const embed = new EmbedBuilder()
-            .setTitle(`🏆 Top ${limit} Clientes por Faturamento`)
-            .setDescription(
-                `**Total representado:** €${totalRevenue.toFixed(2)} (${totalOrders} pedidos)\n` +
-                `**Ticket médio do grupo:** €${(totalRevenue / totalOrders).toFixed(2)}\n`
-            )
-            .setColor('#faa61a')
-            .setTimestamp();
-
-        let clientList = '';
-        for (let i = 0; i < topClients.length; i++) {
-            const client = topClients[i];
-            let username = 'Usuário desconhecido';
-            
-            try {
-                const discordUser = await interaction.client.users.fetch(client.user_id);
-                username = discordUser.username;
-            } catch (error) {
-                console.log(`Could not fetch user ${client.user_id}`);
-            }
-
-            const timeSinceLastOrder = getTimeAgo(client.last_order);
-            const customerSince = getTimeAgo(client.first_order);
-            const loyaltyScore = client.order_count * (client.total_spent / 100);
-
-            // Determinar badge do cliente
-            let badge = '';
-            if (client.total_spent >= 100) badge = '💎 VIP';
-            else if (client.total_spent >= 50) badge = '🥇 Gold';
-            else if (client.total_spent >= 25) badge = '🥈 Silver';
-            else badge = '🥉 Bronze';
-
-            clientList += `**${i + 1}.** ${username} ${badge}\n` +
-                         `   💰 Total: €${client.total_spent.toFixed(2)} | Ticket médio: €${client.avg_ticket.toFixed(2)}\n` +
-                         `   📦 Pedidos: ${client.order_count} | 💎 RP: ${client.total_rp.toLocaleString()}\n` +
-                         `   📅 Cliente há ${customerSince} | Último pedido: ${timeSinceLastOrder} atrás\n` +
-                         `   ⭐ Score de lealdade: ${loyaltyScore.toFixed(1)}\n\n`;
-        }
-
-        // Dividir em múltiplos embeds se necessário
-        if (clientList.length > 4096) {
-            const chunks = clientList.match(/[\s\S]{1,2000}/g) || [];
-            embed.setDescription(embed.data.description + '\n' + chunks[0]);
-            await interaction.editReply({ embeds: [embed] });
-
-            for (let i = 1; i < chunks.length; i++) {
-                const followEmbed = new EmbedBuilder()
-                    .setDescription(chunks[i])
-                    .setColor('#faa61a');
-                await interaction.followUp({ embeds: [followEmbed], ephemeral: true });
-            }
-        } else {
-            embed.addFields([{
-                name: '👑 Rankings',
-                value: clientList,
-                inline: false
-            }]);
-            await interaction.editReply({ embeds: [embed] });
-        }
-
-    } catch (error) {
-        console.error('Error getting top clients:', error);
-        await interaction.editReply({ content: '❌ Erro ao obter top clientes.' });
     }
-}
-
-function getTimeAgo(dateString) {
-    const now = new Date();
-    const past = new Date(dateString);
-    const diffInMs = now - past;
-    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
-    
-    if (diffInMinutes < 1) return 'agora mesmo';
-    if (diffInMinutes < 60) return `${diffInMinutes} minuto(s)`;
-    
-    const diffInHours = Math.floor(diffInMinutes / 60);
-    if (diffInHours < 24) return `${diffInHours} hora(s)`;
-    
-    const diffInDays = Math.floor(diffInHours / 24);
-    if (diffInDays < 30) return `${diffInDays} dia(s)`;
-    
-    const diffInMonths = Math.floor(diffInDays / 30);
-    if (diffInMonths < 12) return `${diffInMonths} mês(es)`;
-    
-    const diffInYears = Math.floor(diffInMonths / 12);
-    return `${diffInYears} ano(s)`;
-}
+};

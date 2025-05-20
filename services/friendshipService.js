@@ -262,6 +262,7 @@ class FriendshipService {
                 .addFields([
                     { name: '👤 Usuário Discord', value: `${user.username} (<@${user.discord_id}>)`, inline: false },
                     { name: '🎮 Conta LoL', value: account.nickname, inline: true },
+                    { name: '🌎 Região', value: account.region || 'Desconhecida', inline: true },
                     { name: '💎 RP Disponível', value: account.rp_amount.toLocaleString(), inline: true },
                     { name: '👥 Amigos', value: `${account.friends_count}/${account.max_friends}`, inline: true },
                     { name: '🏷️ Nick do Solicitante', value: `${lolNickname}#${lolTag}`, inline: false }

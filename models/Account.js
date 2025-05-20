@@ -83,6 +83,7 @@ class Account {
         }
     }
 
+
     static async findByRegion(region) {
         try {
             const query = 'SELECT * FROM accounts WHERE region = ? ORDER BY friends_count ASC';
@@ -92,6 +93,8 @@ class Account {
             throw error;
         }
     }
+
+
 
     static async findAvailableByRegion(region) {
         try {
@@ -200,44 +203,110 @@ class Account {
     static async getStatistics() {
         try {
             const query = `
-                SELECT 
-                    COUNT(*) as total_accounts,
-                    SUM(rp_amount) as total_rp,
-                    SUM(friends_count) as total_friends,
-                    AVG(friends_count) as avg_friends,
-                    COUNT(CASE WHEN friends_count >= max_friends THEN 1 END) as full_accounts,
-                    COUNT(CASE WHEN friends_count < max_friends THEN 1 END) as available_accounts
-                FROM accounts
-            `;
+            SELECT 
+                COUNT(*) as total_friendships,
+                COUNT(DISTINCT f.user_id) as users_with_friends,
+                COUNT(DISTINCT f.account_id) as accounts_with_friends,
+                CASE 
+                    WHEN COUNT(DISTINCT f.user_id) > 0 THEN 
+                        CAST(COUNT(*) AS FLOAT) / COUNT(DISTINCT f.user_id)
+                    ELSE 0
+                END as avg_friends_per_user
+            FROM friendships f
+        `;
             const result = await db.get(query);
 
             return {
-                totalAccounts: result.total_accounts,
-                totalRP: result.total_rp || 0,
-                totalFriends: result.total_friends || 0,
-                averageFriends: result.avg_friends || 0,
-                fullAccounts: result.full_accounts || 0,
-                availableAccounts: result.available_accounts || 0
+                totalFriendships: result.total_friendships || 0,
+                usersWithFriends: result.users_with_friends || 0,
+                accountsWithFriends: result.accounts_with_friends || 0,
+                averageFriendsPerUser: result.avg_friends_per_user || 0
             };
         } catch (error) {
-            console.error('Error getting account statistics:', error);
-            throw error;
+            console.error('Error getting friendship statistics:', error);
+            // Retornar valores padrão em caso de erro
+            return {
+                totalFriendships: 0,
+                usersWithFriends: 0,
+                accountsWithFriends: 0,
+                averageFriendsPerUser: 0
+            };
         }
     }
 
     static async getTopAccounts(limit = 10) {
         try {
+            // Query atualizada para obter dados completos e garantir valores não nulos
             const query = `
-                SELECT * FROM accounts 
-                ORDER BY rp_amount DESC 
-                LIMIT ?
-            `;
-            return await db.all(query, [limit]);
+            SELECT 
+                a.id,
+                a.nickname,
+                COUNT(f.id) as friend_count,
+                COALESCE(a.max_friends, 250) as max_friends,
+                ROUND((COUNT(f.id) * 100.0 / COALESCE(a.max_friends, 250)), 2) as fill_percentage
+            FROM accounts a
+            LEFT JOIN friendships f ON a.id = f.account_id
+            GROUP BY a.id
+            ORDER BY friend_count DESC
+            LIMIT ?
+        `;
+
+            const accounts = await db.all(query, [limit]);
+
+            // Garantir que todos os campos estejam definidos mesmo se vieram como null do banco
+            return accounts.map(account => ({
+                id: account.id,
+                nickname: account.nickname || `Conta ${account.id}`,
+                friend_count: account.friend_count || 0,
+                max_friends: account.max_friends || 250,
+                fill_percentage: account.fill_percentage || 0,
+                region: account.region || 'BR'
+            }));
         } catch (error) {
-            console.error('Error getting top accounts:', error);
-            throw error;
+            console.error('Error getting top accounts by friends:', error);
+            // Retornar array vazio em caso de erro para evitar quebras
+            return [];
         }
     }
+
+    static async getTopAccountsAlternative(limit = 10) {
+        try {
+            // Esta query usa subconsultas para obter contagens mais precisas
+            const query = `
+            WITH account_stats AS (
+                SELECT 
+                    a.id,
+                    a.nickname,
+                    a.max_friends,
+                    a.region,
+                    (SELECT COUNT(*) FROM friendships WHERE account_id = a.id) as friend_count
+                FROM 
+                    accounts a
+            )
+            SELECT 
+                id,
+                nickname,
+                friend_count,
+                COALESCE(max_friends, 250) as max_friends,
+                CASE 
+                    WHEN max_friends > 0 THEN ROUND((friend_count * 100.0 / max_friends), 2)
+                    ELSE 0 
+                END as fill_percentage,
+                region
+            FROM 
+                account_stats
+            ORDER BY 
+                friend_count DESC
+            LIMIT ?
+        `;
+
+            return await db.all(query, [limit]);
+        } catch (error) {
+            console.error('Error getting top accounts (alternative method):', error);
+            return [];
+        }
+    }
+
 
     static async searchByNickname(searchTerm) {
         try {

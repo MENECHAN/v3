@@ -271,36 +271,47 @@ class OrderLog {
         }
     }
 
-    static async updateStatus(orderId, status, orderChannelId = null) {
+static async updateStatus(orderId, status, orderChannelId = null) {
+    try {
+        console.log(`[DEBUG OrderLog.updateStatus] Updating order ${orderId} to status ${status}`);
+        
         let query = 'UPDATE order_logs SET status = ?, updated_at = CURRENT_TIMESTAMP';
         const params = [status];
 
-        // Verifica se orderChannelId foi passado e não é null ou undefined
         if (orderChannelId !== null && orderChannelId !== undefined) {
             query += ', order_channel_id = ?';
             params.push(orderChannelId);
         }
+        
         query += ' WHERE id = ?';
         params.push(orderId);
 
-        console.log(`[DB OrderLog] Attempting to update status for order ${orderId} to ${status}${orderChannelId ? ` and channel ${orderChannelId}` : ''}. Query: ${query} Params: ${params}`);
-        try {
-            // db aqui é a instância da sua classe Database exportada de ../database/connection.js
-            // e o método .run já retorna uma Promise que resolve com { lastID, changes }
-            const result = await db.run(query, params);
+        console.log(`[DEBUG OrderLog] Update query: ${query} Params: ${params}`);
+        
+        const result = await db.run(query, params);
 
-            if (result.changes > 0) {
-                console.log(`[DB OrderLog] Status updated successfully for order ${orderId}. Rows affected: ${result.changes}`);
-                return true;
+        if (result.changes > 0) {
+            console.log(`[DEBUG OrderLog] Status updated successfully for order ${orderId}. Rows affected: ${result.changes}`);
+            return true;
+        } else {
+            console.warn(`[DEBUG OrderLog] Update status for order ${orderId} did not affect any rows. Order might not exist or status was already set.`);
+            
+            // Verificar se o pedido existe
+            const orderExists = await db.get('SELECT id FROM order_logs WHERE id = ?', [orderId]);
+            if (!orderExists) {
+                console.error(`[ERROR OrderLog] Order ${orderId} not found in database`);
             } else {
-                console.warn(`[DB OrderLog] Update status for order ${orderId} did not affect any rows. Order might not exist or status/channel was already set.`);
-                return false;
+                console.warn(`[WARN OrderLog] Order exists, but update had no effect. Current status might already be ${status}`);
             }
-        } catch (error) {
-            console.error(`[DB OrderLog] Error updating status for order ${orderId} to ${status}:`, error);
-            throw error; // Relança o erro para ser tratado pelo OrderService
+            
+            return false;
         }
+        
+    } catch (error) {
+        console.error(`[ERROR OrderLog] Error updating status for order ${orderId} to ${status}:`, error);
+        throw error;
     }
+}
 
     static async addPaymentProof(orderId, paymentProofUrl) {
         const query = 'UPDATE order_logs SET payment_proof_url = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?';

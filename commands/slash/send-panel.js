@@ -16,14 +16,14 @@ module.exports = {
         const embed = new EmbedBuilder()
             .setTitle('🛍️ LoL Shop - Painel Principal')
             .setDescription('**Bem-vindo ao nosso shop de skins do League of Legends!**\n\n' +
-                          '🛒 **Open Cart**: Abra seu carrinho para comprar skins\n' +
-                          '👥 **Add Account**: Adicione uma conta para receber as skins\n\n' +
-                          '⚡ Processo rápido e seguro\n' +
-                          '💎 Melhores preços do mercado\n' +
-                          '🎮 Entrega garantida')
+                '🛒 **Open Cart**: Abra seu carrinho para comprar skins\n' +
+                '👥 **Add Account**: Adicione uma conta para receber as skins\n\n' +
+                '⚡ Processo rápido e seguro\n' +
+                '💎 Melhores preços do mercado\n' +
+                '🎮 Entrega garantida')
             .setColor('#5865f2')
             .setThumbnail('https://i.imgur.com/QIc8Sk0.png')
-            .setFooter({ 
+            .setFooter({
                 text: 'LoL Shop Bot',
                 iconURL: interaction.client.user.displayAvatarURL()
             })
@@ -33,7 +33,7 @@ module.exports = {
         const row = new ActionRowBuilder()
             .addComponents(
                 new ButtonBuilder()
-                    .setCustomId('open_cart')
+                    .setCustomId('open_cart_region')
                     .setLabel('🛒 Open Cart')
                     .setStyle(ButtonStyle.Primary),
                 new ButtonBuilder()
@@ -44,7 +44,7 @@ module.exports = {
 
         // Get the channel
         const channel = interaction.guild.channels.cache.get(config.orderPanelChannelId);
-        
+
         if (!channel) {
             return await interaction.reply({
                 content: '❌ Canal do painel não encontrado.',

@@ -69,13 +69,31 @@ module.exports = {
     }
 };
 
+
+
 async function handleFriendshipStats(interaction) {
     try {
         await interaction.deferReply({ ephemeral: true });
 
         const logStats = await FriendshipLog.getStatistics();
         const friendshipStats = await Friendship.getStatistics();
-        const accountStats = await Account.getTopAccounts(5);
+        
+        // Obter contas com informações de amigos corretamente formatadas
+        const topAccounts = await Account.getTopAccounts(5);
+        
+        // Formatação atualizada para garantir que os valores não apareçam como undefined
+        const formattedTopAccounts = topAccounts.map(acc => {
+            const friendCount = acc.friend_count || 0;
+            const maxFriends = acc.max_friends || 250;
+            const fillPercentage = maxFriends > 0 ? Math.round((friendCount / maxFriends) * 100) : 0;
+            
+            return {
+                ...acc,
+                friend_count: friendCount,
+                max_friends: maxFriends,
+                fill_percentage: fillPercentage
+            };
+        });
 
         const embed = new EmbedBuilder()
             .setTitle('📊 Estatísticas de Amizades')
@@ -101,9 +119,11 @@ async function handleFriendshipStats(interaction) {
                 },
                 {
                     name: '🏆 Top Contas (por amigos)',
-                    value: accountStats.map(acc => 
-                        `**${acc.nickname}:** ${acc.friend_count}/${acc.max_friends} (${acc.fill_percentage}%)`
-                    ).join('\n') || 'Nenhuma conta encontrada',
+                    value: formattedTopAccounts.length > 0 ?
+                        formattedTopAccounts.map(acc => 
+                            `**${acc.nickname}:** ${acc.friend_count}/${acc.max_friends} (${acc.fill_percentage}%)`
+                        ).join('\n') :
+                        'Nenhuma conta encontrada',
                     inline: false
                 }
             ])
