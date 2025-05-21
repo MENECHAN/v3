@@ -18,6 +18,14 @@ const catalogManageCommand = new SlashCommandBuilder()
     )
     .addSubcommand(subcommand =>
         subcommand
+            .setName('upload')
+            .setDescription('Faz upload de um novo arquivo catalog.json para formatação.')
+            .addAttachmentOption(option => // Opção para anexar o arquivo
+                option.setName('catalogfile')
+                    .setDescription('O arquivo catalog.json a ser enviado.')
+                    .setRequired(true)))
+    .addSubcommand(subcommand =>
+        subcommand
             .setName('cleanup')
             .setDescription('Remove backups antigos')
             .addIntegerOption(option =>

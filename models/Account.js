@@ -49,7 +49,7 @@ class Account {
     static async create(nickname, rpAmount, friendsCount = 0, maxFriends = 250, region = 'BR') {
         try {
             const query = `
-            INSERT INTO accounts (nickname, rp_amount, friends_count, max_friends, region) 
+            INSERT INTO accounts (nickname, rp_amount, friends_count, max_friends, region)
             VALUES (?, ?, ?, ?, ?)
         `;
             const result = await db.run(query, [nickname, rpAmount, friendsCount, maxFriends, region]);

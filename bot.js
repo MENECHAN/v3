@@ -4,14 +4,13 @@ const OrderService = require('./services/orderService');
 const config = require('./config.json');
 const fs = require('fs');
 const path = require('path');
-const { applyDatabaseFixes } = require('./database/schema-fix');
 const revenueCommand = require('./commands/slash/revenue');
 const friendshipLogsCommand = require('./commands/slash/friendship-logs');
 
 // Import auto-updater
 const CatalogAutoUpdater = require('./CatalogAutoUpdater');
 
-// ⭐ CORREÇÃO DO IMPORT
+// Correct import
 const FriendshipNotificationService = require('./services/FriendshipNotificationService');
 
 // Check if required files exist
@@ -38,7 +37,7 @@ console.log('✅ All required files found!');
 
 // Import modules after verification
 const Database = require('./database/connection');
-const { runMigrations } = require('./database/migrations');
+const { initializeDatabase } = require('./database/init');
 
 // Import handlers
 const buttonHandler = require('./handlers/buttonHandler');
@@ -49,7 +48,6 @@ const modalHandler = require('./handlers/modalHandler');
 const sendPanelCommand = require('./commands/slash/send-panel');
 const accountCommand = require('./commands/slash/account');
 const priceManageCommand = require('./commands/slash/price-manage');
-const { initializeDatabase } = require('./database/init');
 
 // Initialize client
 const client = new Client({
@@ -67,13 +65,11 @@ let friendshipNotificationService;
 
 // Bot ready event
 client.once('ready', async () => {
+    //Database.run("ALTER TABLE accounts ADD COLUMN region TEXT DEFAULT 'BR';");
     console.log(`🚀 ${client.user.tag} está online!`);
 
-    // Initialize database
+    // Initialize database using the new initializeDatabase function
     try {
-        await Database.initialize();
-        await applyDatabaseFixes();
-        await runMigrations();
         await initializeDatabase();
         console.log('✅ Database initialized!');
     } catch (error) {
@@ -85,7 +81,7 @@ client.once('ready', async () => {
     catalogUpdater = new CatalogAutoUpdater(client);
     console.log('🔄 Catalog auto-updater initialized!');
 
-    // ⭐ INICIALIZAR SERVIÇO DE NOTIFICAÇÃO DE AMIZADES
+    // Initialize friendship notification service
     friendshipNotificationService = new FriendshipNotificationService(client);
     await friendshipNotificationService.start();
     console.log('🔔 Friendship notification service initialized!');
@@ -122,13 +118,13 @@ client.on('messageCreate', async message => {
                     // Confirmar recebimento
                     await message.reply('✅ Comprovante de pagamento recebido! Nossa equipe irá analisar em breve.');
 
-                    // ⭐ ATUALIZAR COM FALLBACK DIRETO
+                    // Update with direct fallback
                     console.log(`[DEBUG] Updating order ${order.id} with payment proof...`);
 
                     let updateSuccess = false;
 
                     try {
-                        // Tentar método normal com timeout
+                        // Try normal method with timeout
                         updateSuccess = await Promise.race([
                             OrderLog.addPaymentProof(order.id, attachment.url),
                             new Promise((_, reject) =>
@@ -142,7 +138,7 @@ client.on('messageCreate', async message => {
                         console.error(`[ERROR] OrderLog.addPaymentProof failed:`, error);
                         console.log(`[DEBUG] Trying direct database update...`);
 
-                        // ⭐ FALLBACK: Atualização direta no banco
+                        // Fallback: Direct database update
                         try {
                             const db = require('./database/connection');
                             const directResult = await db.run(
@@ -166,15 +162,15 @@ client.on('messageCreate', async message => {
                         return;
                     }
 
-                    // ⭐ ENVIAR PARA ADMIN
+                    // Send to admin
                     console.log(`[DEBUG] Sending order ${order.id} to admin approval...`);
 
                     try {
-                        // Verificar se OrderService existe
+                        // Check if OrderService exists
                         if (!OrderService || typeof OrderService.sendOrderToAdminApproval !== 'function') {
                             console.error(`[ERROR] OrderService not available, using manual notification`);
 
-                            // ⭐ FALLBACK: Notificação manual
+                            // Fallback: Manual notification
                             const adminChannelId = config.adminLogChannelId || config.approvalNeededChannelId || config.orderApprovalChannelId;
                             if (adminChannelId) {
                                 const adminChannel = await message.client.channels.fetch(adminChannelId);
@@ -210,14 +206,14 @@ client.on('messageCreate', async message => {
                             }
 
                         } else {
-                            // Usar OrderService normalmente
+                            // Use OrderService normally
                             await OrderService.sendOrderToAdminApproval(message.client, order.id);
                             console.log(`[DEBUG] OrderService notification sent`);
                         }
 
                     } catch (adminError) {
                         console.error(`[ERROR] Admin notification failed:`, adminError);
-                        // Não falhar aqui, apenas logar
+                        // Don't fail here, just log
                     }
 
                     console.log(`[DEBUG] Payment proof processing completed for order ${order.id}`);
@@ -292,7 +288,7 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-// ⭐ HANDLERS PARA COMANDOS DE NOTIFICAÇÃO DE AMIZADES
+// Friendship notification command handlers
 async function handleFriendshipNotificationCommand(interaction) {
     // Check if user has admin role
     if (!interaction.member.roles.cache.has(config.adminRoleId)) {
@@ -373,10 +369,10 @@ async function handleManualCheck(interaction) {
 
         await interaction.editReply({ embeds: [initialEmbed] });
 
-        // Executar verificação
+        // Run verification
         await friendshipNotificationService.checkEligibleFriendships();
 
-        // Obter estatísticas atualizadas
+        // Get updated statistics
         const stats = await friendshipNotificationService.getStatistics();
 
         const resultEmbed = new EmbedBuilder()
@@ -474,7 +470,7 @@ async function handleResetNotifications(interaction) {
 
         await interaction.editReply({ embeds: [warningEmbed] });
 
-        // Aguardar 10 segundos
+        // Wait 10 seconds
         await new Promise(resolve => setTimeout(resolve, 10000));
 
         try {
@@ -530,7 +526,7 @@ process.on('uncaughtException', error => {
 process.on('SIGINT', () => {
     console.log('🛑 Shutting down bot...');
 
-    // ⭐ PARAR SERVIÇOS ANTES DE FECHAR
+    // Stop services before closing
     if (friendshipNotificationService) {
         friendshipNotificationService.stop();
     }
